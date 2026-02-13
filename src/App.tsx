@@ -2,6 +2,7 @@ import SideBar from "./components/SideBar";
 import Home from "./components/pages/Home";
 import { useStateContext } from "./components/context/StateProvider";
 import App2 from "./components/pages/App2";
+import Summarizer from "./components/pages/Summarizer";
 
 function App() {
   const { currentApp } = useStateContext();
@@ -11,7 +12,8 @@ function App() {
       <SideBar />
       <div className="bg-gray-100 w-full">
         {currentApp === "home" && <Home />}
-        {currentApp === "app2" && <App2 />}
+        {currentApp === "RAG Chatbot" && <App2 />}
+        {currentApp === "Summarizer" && <Summarizer />}
       </div>
     </div>
   );

@@ -2,6 +2,8 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
+
+from app.routers import app2
 from .routers import users, app1
 from .dependencies import get_query_token, get_token_header
 
@@ -23,6 +25,7 @@ app.add_middleware(
 
 app.include_router(prefix="/api",router= users.router)
 app.include_router(prefix="/api",router= app1.router)
+app.include_router(prefix="/api",router= app2.router)
 
 
 @app.get("/")

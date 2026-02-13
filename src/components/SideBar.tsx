@@ -1,7 +1,7 @@
 import { useStateContext } from "./context/StateProvider";
 
 export default function SideBar() {
-  const apps = ["home", "RAG Chatbot"];
+  const apps = ["home", "RAG Chatbot", "Summarizer"];
   const { setCurrentApp } = useStateContext();
   return (
     <div className=" w-64 h-screen bg-yellow-100 p-2">
@@ -10,8 +10,7 @@ export default function SideBar() {
         {apps.map((app, index) => (
           <div
             onClick={() => {
-              const key = app === "RAG Chatbot" ? "app2" : "home";
-              setCurrentApp(key as "home" | "app2");
+              setCurrentApp(app);
             }}
             key={index}
             className=" mb-2 bg-white p-2 cursor-pointer"
