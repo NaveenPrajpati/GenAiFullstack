@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 
-type AppName = "home" | "app2" | "Summarizer" | "RAG Chatbot";
+type AppName = "home" | "app2" | "Summarizer" | "RAG Chatbot" | "WebScraper";
 
 type StateContextValue = {
   currentApp: AppName;

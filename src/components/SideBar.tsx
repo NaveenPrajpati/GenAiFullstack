@@ -1,7 +1,7 @@
 import { useStateContext } from "./context/StateProvider";
 
 export default function SideBar() {
-  const apps = ["home", "RAG Chatbot", "Summarizer"];
+  const apps = ["home", "RAG Chatbot", "Summarizer", "WebScraper"];
   const { setCurrentApp } = useStateContext();
   return (
     <div className=" w-64 h-screen bg-yellow-100 p-2">
