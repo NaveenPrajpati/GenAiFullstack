@@ -1,36 +1,28 @@
-import app.routers.webscraping
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
 
-from app.routers import app2, emailassistant, recipegenerator
-from .routers import users, app1
-from .dependencies import get_query_token, get_token_header
-from app.routers import webscraping 
+from app.routers import app2, emailassistant, recipegenerator, users, app1, webscraping
 
 load_dotenv()
 
 app = FastAPI()
 
-origins = [
-    "http://localhost:5173",
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(prefix="/api",router= users.router)
-app.include_router(prefix="/api",router= app1.router)
-app.include_router(prefix="/api",router= app2.router)
-app.include_router(prefix="/api",router= webscraping.router)
-app.include_router(prefix="/api",router= emailassistant.router)
-app.include_router(prefix="/api",router= recipegenerator.router)
+app.include_router(prefix="/api/user", router=users.router)
+app.include_router(prefix="/api", router=app1.router)
+app.include_router(prefix="/api", router=app2.router)
+app.include_router(prefix="/api", router=webscraping.router)
+app.include_router(prefix="/api", router=emailassistant.router)
+app.include_router(prefix="/api", router=recipegenerator.router)
 
 
 @app.get("/")

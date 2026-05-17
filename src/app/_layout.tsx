@@ -24,7 +24,7 @@ export default function MainLayout() {
         overlayColor: 'rgba(0,0,0,0.5)',
       }}>
       <Drawer.Screen name="index" options={{ drawerLabel: 'Home' }} />
-      <Drawer.Screen name="rag-chatbot" options={{ drawerLabel: 'RAG Chatbot' }} />
+      <Drawer.Screen name="rag-chatbot" options={{ headerTitle: 'Rag Chatbot' }} />
       <Drawer.Screen name="summarizer" options={{ drawerLabel: 'Summarizer' }} />
       <Drawer.Screen name="web-scraper" options={{ drawerLabel: 'Web Scraper' }} />
       <Drawer.Screen name="email-assistant" options={{ drawerLabel: 'Email Assistant' }} />

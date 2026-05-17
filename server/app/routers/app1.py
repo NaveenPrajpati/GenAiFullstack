@@ -9,6 +9,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_community.vectorstores import InMemoryVectorStore
 from dotenv import load_dotenv
+from langchain_chroma import Chroma
 
 load_dotenv()
 
@@ -20,7 +21,11 @@ router = APIRouter(
 
 embeddings = OpenAIEmbeddings()
 text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-vectorstore = InMemoryVectorStore(embeddings)
+vectorstore = Chroma(
+    collection_name="rag_collection",
+    embedding_function=embeddings,
+    persist_directory="./chroma_langchain_db",
+)
 
 
 def get_vectorstore():

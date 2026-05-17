@@ -8,6 +8,7 @@ import {
   Platform,
 } from 'react-native';
 import { useState, useRef } from 'react';
+import { DocumentPickerAsset } from 'expo-document-picker';
 import { BASE_URL } from '../services/api';
 import Spinner from '../components/ui/Spinner';
 import WebFileUpload from '../components/ui/WebFileUpload';
@@ -25,15 +26,24 @@ export default function RagChatbotScreen() {
   const [isUploading, setIsUploading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
-  const handleUpload = async (file: unknown) => {
+  const handleUpload = async (asset: DocumentPickerAsset) => {
     setIsUploading(true);
     setUploadStatus('Uploading...');
     const formData = new FormData();
-    formData.append('file', file as Blob);
+    if (Platform.OS === 'web') {
+      const blob = await fetch(asset.uri).then((r) => r.blob());
+      formData.append('file', blob, asset.name);
+    } else {
+      formData.append('file', {
+        uri: asset.uri,
+        name: asset.name,
+        type: asset.mimeType ?? 'application/pdf',
+      } as any);
+    }
     try {
       const response = await fetch(`${BASE_URL}/app1/ingest`, { method: 'POST', body: formData });
       if (!response.ok) throw new Error('Upload failed');
-      setUploadStatus(`✓ "${(file as File).name}" uploaded successfully`);
+      setUploadStatus(`✓ "${asset.name}" uploaded successfully`);
     } catch (err: unknown) {
       setUploadStatus(`✗ Upload failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
@@ -54,7 +64,7 @@ export default function RagChatbotScreen() {
       const response = await fetch(`${BASE_URL}/app1/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: userMessage }),
+        body: JSON.stringify({ question: userMessage }),
       });
       if (!response.ok) throw new Error(`Error: ${response.status}`);
       const data = await response.json();
@@ -78,11 +88,10 @@ export default function RagChatbotScreen() {
 
   return (
     <KeyboardAvoidingView
-      className="flex-1"
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      style={{ flex: 1 }}>
       <View className="flex-1 bg-gray-50">
         <View className="border-b border-gray-200 bg-white px-5 py-4">
-          <Text className="text-xl font-bold text-gray-900">🤖 RAG Chatbot</Text>
           <Text className="mt-1 text-sm text-gray-500">
             Upload a document and ask questions about it
           </Text>
