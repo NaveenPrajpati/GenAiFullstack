@@ -23,7 +23,7 @@ const ALL_CATEGORIES = Object.keys(INGREDIENTS) as IngredientCategory[];
 export default function RecipeGeneratorScreen() {
   const [diet, setDiet] = useState<Diet>('veg');
   const [cuisine, setCuisine] = useState<string | null>(null);
-  const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
+  const [selectedIngredients, setSelectedIngredients] = useState<string>('');
   const [searchText, setSearchText] = useState('');
   const [expandedCategory, setExpandedCategory] = useState<IngredientCategory | null>(null);
   const { text, loading, error, stream, stop, reset } = useStreaming();
@@ -37,7 +37,7 @@ export default function RecipeGeneratorScreen() {
     const results: { item: string; category: IngredientCategory }[] = [];
     for (const cat of visibleCategories) {
       for (const item of INGREDIENTS[cat]) {
-        if (item.toLowerCase().includes(q) && !selectedIngredients.includes(item)) {
+        if (item.toLowerCase().includes(q) && !selectedIngredients.split(',').includes(item)) {
           results.push({ item, category: cat });
           if (results.length >= 12) return results;
         }
@@ -47,29 +47,33 @@ export default function RecipeGeneratorScreen() {
   }, [searchText, diet, selectedIngredients, visibleCategories]);
 
   const addIngredient = (item: string) => {
-    if (!selectedIngredients.includes(item)) setSelectedIngredients((p) => [...p, item]);
+    if (!selectedIngredients.split(',').includes(item))
+      setSelectedIngredients((p) => (p ? `${p},${item}` : item));
     setSearchText('');
   };
 
   const removeIngredient = (item: string) =>
-    setSelectedIngredients((p) => p.filter((i) => i !== item));
+    setSelectedIngredients((p) => p.split(',').filter((i) => i !== item).join(','));
 
   const switchDiet = (d: Diet) => {
     setDiet(d);
     if (d === 'veg') {
       setSelectedIngredients((prev) =>
-        prev.filter((item) => {
-          for (const cat of ALL_CATEGORIES) {
-            if (isNonVeg(cat) && INGREDIENTS[cat].includes(item)) return false;
-          }
-          return true;
-        })
+        prev
+          .split(',')
+          .filter((item) => {
+            for (const cat of ALL_CATEGORIES) {
+              if (isNonVeg(cat) && INGREDIENTS[cat].includes(item)) return false;
+            }
+            return true;
+          })
+          .join(',')
       );
     }
   };
 
   const handleGenerate = () => {
-    if (!selectedIngredients.length || loading) return;
+    if (!selectedIngredients || loading) return;
     stream('/recipe-generator/generate/stream', {
       ingredients: selectedIngredients,
       diet,
@@ -78,7 +82,7 @@ export default function RecipeGeneratorScreen() {
   };
 
   const handleClearAll = () => {
-    setSelectedIngredients([]);
+    setSelectedIngredients('');
     setSearchText('');
     setCuisine(null);
     reset();
@@ -189,10 +193,10 @@ export default function RecipeGeneratorScreen() {
           {selectedIngredients.length > 0 && (
             <View>
               <Text className="mb-2 text-xs text-gray-500">
-                Selected ({selectedIngredients.length})
+                Selected ({selectedIngredients.split(',').length})
               </Text>
               <View className="flex-row flex-wrap gap-2">
-                {selectedIngredients.map((item) => (
+                {selectedIngredients.split(',').map((item) => (
                   <View
                     key={item}
                     className="flex-row items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-3 py-1">
@@ -228,7 +232,7 @@ export default function RecipeGeneratorScreen() {
               {expandedCategory === category && (
                 <View className="mt-2 flex-row flex-wrap gap-1.5 px-1">
                   {INGREDIENTS[category].map((item) => {
-                    const isSelected = selectedIngredients.includes(item);
+                    const isSelected = selectedIngredients.split(',').includes(item);
                     return (
                       <TouchableOpacity
                         key={item}
@@ -259,7 +263,7 @@ export default function RecipeGeneratorScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             onPress={loading ? stop : handleGenerate}
-            disabled={!selectedIngredients.length && !loading}
+            disabled={!selectedIngredients && !loading}
             className={`flex-1 items-center justify-center rounded-xl py-3 ${loading ? 'bg-red-500' : 'bg-amber-500'} ${!selectedIngredients.length && !loading ? 'opacity-50' : ''}`}
             activeOpacity={0.8}>
             {loading ? (

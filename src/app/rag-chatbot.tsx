@@ -20,28 +20,35 @@ interface Message {
 
 export default function RagChatbotScreen() {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [inputUrl, setInputUrl] = useState('');
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
-  const handleUpload = async (asset: DocumentPickerAsset) => {
+  const handleUpload = async (asset: DocumentPickerAsset | null, action: 'url' | 'file') => {
     setIsUploading(true);
     setUploadStatus('Uploading...');
     const formData = new FormData();
-    if (Platform.OS === 'web') {
-      const blob = await fetch(asset.uri).then((r) => r.blob());
-      formData.append('file', blob, asset.name);
-    } else {
-      formData.append('file', {
-        uri: asset.uri,
-        name: asset.name,
-        type: asset.mimeType ?? 'application/pdf',
-      } as any);
-    }
+    if (action != 'url')
+      if (Platform.OS === 'web') {
+        const blob = await fetch(asset.uri).then((r) => r.blob());
+        formData.append('file', blob, asset.name);
+      } else {
+        formData.append('file', {
+          uri: asset.uri,
+          name: asset.name,
+          type: asset.mimeType ?? 'application/pdf',
+        } as any);
+      }
+    formData.append('data', JSON.stringify({ url: inputUrl, type: 'url' }));
+    const query = new URLSearchParams({ page: 2, isAdming: false }).toString();
     try {
-      const response = await fetch(`${BASE_URL}/app1/ingest`, { method: 'POST', body: formData });
+      const response = await fetch(`${BASE_URL}/app1/ingest/${action}?${query}`, {
+        method: 'POST',
+        body: formData,
+      });
       if (!response.ok) throw new Error('Upload failed');
       setUploadStatus(`✓ "${asset.name}" uploaded successfully`);
     } catch (err: unknown) {
@@ -100,6 +107,21 @@ export default function RagChatbotScreen() {
             isUploading={isUploading}
             uploadStatus={uploadStatus}
           />
+          <Text>Or </Text>
+          <View className="flex-row items-center gap-x-2">
+            <TextInput
+              onChangeText={setInputUrl}
+              multiline
+              numberOfLines={2}
+              placeholder="add url"
+              className="flex-1 rounded-lg border p-2"
+            />
+            <TouchableOpacity
+              onPress={() => handleUpload(null, 'url')}
+              className="rounded-lg border p-2">
+              <Text>Add</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView ref={scrollRef} className="flex-1 p-4">

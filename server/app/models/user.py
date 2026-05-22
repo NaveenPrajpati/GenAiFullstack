@@ -1,6 +1,29 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from typing import Optional, Literal
+from typing import Optional, Literal, Any
+from bson import ObjectId
 import re
+
+
+class PyObjectId(str):
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
+    @classmethod
+    def validate(cls, v: Any) -> str:
+        if isinstance(v, ObjectId):
+            return str(v)
+        if isinstance(v, str) and ObjectId.is_valid(v):
+            return v
+        raise ValueError(f"Invalid ObjectId: {v}")
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source, handler):
+        from pydantic_core import core_schema
+        return core_schema.no_info_plain_validator_function(
+            cls.validate,
+            serialization=core_schema.to_string_ser_schema(),
+        )
 
 
 class UserCreate(BaseModel):
@@ -44,7 +67,7 @@ class UserLogin(BaseModel):
 
 
 class UserResponse(BaseModel):
-    id: int
+    id: PyObjectId = Field(alias="_id")
     first_name: str
     last_name: str
     name: str
@@ -52,8 +75,7 @@ class UserResponse(BaseModel):
     role: str
     description: Optional[str]
 
-    class Config:
-        from_attributes = True
+    model_config = {"populate_by_name": True}
 
 
 class LoginResponse(BaseModel):

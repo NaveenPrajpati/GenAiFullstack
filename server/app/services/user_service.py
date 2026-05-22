@@ -1,9 +1,8 @@
 import hashlib
 import os
+from bson import ObjectId
 from app.models.user import UserCreate, UserLogin
-
-fake_db: list[dict] = []
-counter = 1
+from app.database import get_db
 
 
 def _hash_password(password: str) -> str:
@@ -19,21 +18,26 @@ def _verify_password(password: str, stored: str) -> bool:
     return key.hex() == key_hex
 
 
-def get_all_users() -> list[dict]:
-    return [_safe(u) for u in fake_db]
+def _collection():
+    return get_db()["users"]
 
 
-def get_user_by_id(user_id: int) -> dict | None:
-    user = next((u for u in fake_db if u["id"] == user_id), None)
-    return _safe(user) if user else None
+async def get_all_users() -> list[dict]:
+    users = await _collection().find({}, {"password_hash": 0}).to_list(length=None)
+    return users
 
 
-def signup_user(user: UserCreate) -> dict:
-    global counter
-    if any(u["email"] == user.email for u in fake_db):
+async def get_user_by_id(user_id: str) -> dict | None:
+    if not ObjectId.is_valid(user_id):
+        return None
+    return await _collection().find_one({"_id": ObjectId(user_id)}, {"password_hash": 0})
+
+
+async def signup_user(user: UserCreate) -> dict:
+    col = _collection()
+    if await col.find_one({"email": user.email}):
         raise ValueError("Email already registered")
     record = {
-        "id": counter,
         "first_name": user.first_name,
         "last_name": user.last_name,
         "name": user.name,
@@ -42,17 +46,14 @@ def signup_user(user: UserCreate) -> dict:
         "description": user.description,
         "password_hash": _hash_password(user.password),
     }
-    fake_db.append(record)
-    counter += 1
-    return _safe(record)
+    result = await col.insert_one(record)
+    return await col.find_one({"_id": result.inserted_id}, {"password_hash": 0})
 
 
-def login_user(credentials: UserLogin) -> dict:
-    user = next((u for u in fake_db if u["email"] == credentials.email), None)
+async def login_user(credentials: UserLogin) -> dict:
+    col = _collection()
+    user = await col.find_one({"email": credentials.email})
     if not user or not _verify_password(credentials.password, user["password_hash"]):
         raise ValueError("Invalid email or password")
-    return _safe(user)
-
-
-def _safe(user: dict) -> dict:
-    return {k: v for k, v in user.items() if k != "password_hash"}
+    user.pop("password_hash", None)
+    return user
