@@ -3,6 +3,8 @@ import os
 import shutil
 import tempfile
 import uuid
+import requests
+from bs4 import BeautifulSoup
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Form, UploadFile, File, HTTPException
@@ -10,41 +12,54 @@ from pydantic import BaseModel
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_community.document_loaders import PyPDFLoader, TextLoader, WebBaseLoader
+from langchain_core.documents import Document
+from langchain_community.document_loaders import PyPDFLoader, TextLoader
+from langchain_community.retrievers import PineconeHybridSearchRetriever
 from dotenv import load_dotenv
 import json
 from pinecone import Pinecone, ServerlessSpec
-from langchain_pinecone import PineconeVectorStore
-from langchain_community.retrievers import BM25Retriever
-from langchain_classic.retrievers import (
-    EnsembleRetriever,
-    ContextualCompressionRetriever,
-)
+from pinecone_text.sparse import BM25Encoder
+from langchain_classic.retrievers import ContextualCompressionRetriever
 from langchain_classic.retrievers.document_compressors import CrossEncoderReranker
 from langchain_community.document_transformers import LongContextReorder
 from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 from langchain_classic.retrievers.multi_query import MultiQueryRetriever
+from supabase import create_client, Client
 from app.utils.spliters import getSpliter
 
+import logging
 
 load_dotenv()
+logger = logging.getLogger(__name__)
+
+# ── Pinecone setup ─────────────────────────────────────────────────────────────
 
 api_key = os.getenv("PINECONE_KEY")
 if not api_key:
     raise ValueError("PINECONE_KEY environment variable not set")
 
 pc = Pinecone(api_key=api_key)
-index_name = "rag-first"
+index_name = "rag-hybrid"
 
 if not pc.has_index(index_name):
     pc.create_index(
         name=index_name,
         dimension=1536,
-        metric="cosine",
+        metric="dotproduct",  # dotproduct required for native Pinecone sparse+dense hybrid
         spec=ServerlessSpec(cloud="aws", region="us-east-1"),
     )
 
 index = pc.Index(index_name)
+
+# ── Supabase setup ─────────────────────────────────────────────────────────────
+
+supabase_url = os.getenv("SUPABASE_URL")
+supabase_key = os.getenv("SUPABASE_KEY")
+if not supabase_url or not supabase_key:
+    raise ValueError("SUPABASE_URL and SUPABASE_KEY environment variables must be set")
+supabase: Client = create_client(supabase_url, supabase_key)
+
+# ── Router & shared models ─────────────────────────────────────────────────────
 
 router = APIRouter(
     prefix="/rag",
@@ -54,28 +69,57 @@ router = APIRouter(
 
 embeddings = OpenAIEmbeddings()
 text_splitter = getSpliter(strategy="recursive", embeddings=None)
-vector_store = PineconeVectorStore(embedding=embeddings, index=index)
+
+# Pre-trained BM25 sparse encoder (MS MARCO — good general-purpose baseline)
+bm25_encoder = BM25Encoder().default()
+
+hybrid_retriever = PineconeHybridSearchRetriever(
+    embeddings=embeddings,
+    sparse_encoder=bm25_encoder,
+    index=index,
+    top_k=10,
+)
 
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 _cross_encoder = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-base")
 reranker = CrossEncoderReranker(model=_cross_encoder, top_n=5)
 reorder = LongContextReorder()
 
-_all_chunks: list = []
-sparse_retriever: Optional[BM25Retriever] = None
-
-# Tracks async ingestion jobs: job_id -> status dict
+# In-memory job tracker — fast status checks without hitting Supabase
 _ingestion_jobs: dict[str, dict] = {}
 
 
-def _rebuild_sparse_retriever():
-    global sparse_retriever
-    if _all_chunks:
-        sparse_retriever = BM25Retriever.from_documents(_all_chunks)
-        sparse_retriever.k = 10
+# ── URL loader (BeautifulSoup) ─────────────────────────────────────────────────
+
+def _load_url(url: str) -> list[Document]:
+    resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, "html.parser")
+    for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
+        tag.decompose()
+    text = soup.get_text(separator="\n", strip=True)
+    return [Document(page_content=text, metadata={"source": url})]
 
 
-# ── Evaluation helpers ────────────────────────────────────────────────────────
+# ── Supabase helpers ───────────────────────────────────────────────────────────
+
+def _create_log(doc_id: str, source: str, file_type: str, ingested_at: str) -> None:
+    supabase.table("rag_ingestion_logs").insert(
+        {
+            "doc_id": doc_id,
+            "source": source,
+            "file_type": file_type,
+            "status": "queued",
+            "ingested_at": ingested_at,
+        }
+    ).execute()
+
+
+def _update_log(doc_id: str, updates: dict) -> None:
+    supabase.table("rag_ingestion_logs").update(updates).eq("doc_id", doc_id).execute()
+
+
+# ── Evaluation helpers ─────────────────────────────────────────────────────────
 
 
 async def _score_doc_relevance(question: str, content: str) -> float:
@@ -143,14 +187,10 @@ async def _run_evaluation(question: str, docs: list, context: str, answer: str) 
         _score_recall(question, context),
         _score_hallucination(context, answer),
     )
-
     relevance_scores = list(results[: len(docs)])
     recall_score = results[-2]
     hallucination_rate = results[-1]
-    precision = (
-        sum(relevance_scores) / len(relevance_scores) if relevance_scores else 0.0
-    )
-
+    precision = sum(relevance_scores) / len(relevance_scores) if relevance_scores else 0.0
     return {
         "retrieval_precision": round(precision, 3),
         "recall_score": recall_score,
@@ -158,7 +198,7 @@ async def _run_evaluation(question: str, docs: list, context: str, answer: str) 
     }
 
 
-# ── Source citation builder ───────────────────────────────────────────────────
+# ── Source citation builder ────────────────────────────────────────────────────
 
 
 def _build_sources(docs: list) -> list[dict]:
@@ -170,76 +210,94 @@ def _build_sources(docs: list) -> list[dict]:
         if key in seen:
             continue
         seen.add(key)
-
         # CrossEncoderReranker writes relevance_score into metadata after reranking
         raw_score = doc.metadata.get("relevance_score")
         sources.append(
             {
                 "chunk_text": doc.page_content,
                 "source": doc.metadata.get("source", "unknown"),
-                "page_number": doc.metadata.get(
-                    "page"
-                ),  # PyPDFLoader sets "page" (0-indexed)
-                "confidence_score": (
-                    round(float(raw_score), 4) if raw_score is not None else None
-                ),
+                "page_number": doc.metadata.get("page"),  # PyPDFLoader sets "page" (0-indexed)
+                "confidence_score": round(float(raw_score), 4) if raw_score is not None else None,
                 "doc_id": doc.metadata.get("doc_id"),
             }
         )
     return sources
 
 
-# ── Async ingestion background task ──────────────────────────────────────────
+# ── Async ingestion background task ───────────────────────────────────────────
 
 
 async def _run_ingestion(
     job_id: str,
-    loader,
+    loader_fn,
     display_source: str,
     file_type: str,
     tmp_path: Optional[str],
-):
+) -> None:
     try:
         _ingestion_jobs[job_id]["status"] = "processing"
+        await asyncio.to_thread(_update_log, job_id, {"status": "processing"})
 
-        documents = await asyncio.to_thread(loader.load)
+        documents = await asyncio.to_thread(loader_fn)
         chunks = await asyncio.to_thread(text_splitter.split_documents, documents)
 
         ingested_at = datetime.now(timezone.utc).isoformat()
-        for i, chunk in enumerate(chunks):
-            chunk.metadata.update(
-                {
-                    "doc_id": job_id,
-                    "source": display_source,
-                    "file_type": file_type,
-                    "ingested_at": ingested_at,
-                    "chunk_index": i,
-                    "total_chunks": len(chunks),
-                }
-            )
+        texts = [chunk.page_content for chunk in chunks]
+        total = len(chunks)
+        metadatas = [
+            {
+                "doc_id": job_id,
+                "source": display_source,
+                "file_type": file_type,
+                "ingested_at": ingested_at,
+                "chunk_index": i,
+                "total_chunks": total,
+            }
+            for i in range(total)
+        ]
 
-        await asyncio.to_thread(vector_store.add_documents, chunks)
-        _all_chunks.extend(chunks)
-        _rebuild_sparse_retriever()
+        # Upsert dense (OpenAI) + sparse (BM25) vectors into Pinecone
+        await asyncio.to_thread(hybrid_retriever.add_texts, texts, metadatas=metadatas)
 
+        completed_at = datetime.now(timezone.utc).isoformat()
         _ingestion_jobs[job_id].update(
             {
                 "status": "completed",
                 "chunks": len(chunks),
                 "source": display_source,
-                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "completed_at": completed_at,
             }
+        )
+        await asyncio.to_thread(
+            _update_log,
+            job_id,
+            {"status": "completed", "chunks": len(chunks), "completed_at": completed_at},
         )
 
     except Exception as exc:
         _ingestion_jobs[job_id].update({"status": "failed", "error": str(exc)})
+        await asyncio.to_thread(_update_log, job_id, {"status": "failed", "error": str(exc)})
 
     finally:
         if tmp_path and os.path.exists(tmp_path):
             os.unlink(tmp_path)
 
 
-# ── Routes ────────────────────────────────────────────────────────────────────
+# ── Routes ─────────────────────────────────────────────────────────────────────
+
+
+@router.get("/get-files", status_code=200)
+async def get_all_files():
+    try:
+        result = (
+            supabase.table("rag_ingestion_logs")
+            .select("*")
+            .order("ingested_at", desc=True)
+            .execute()
+        )
+        return {"message": "list fetched", "data": result.data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch files: {str(e)}")
 
 
 @router.post("/ingest/{action}", status_code=202)
@@ -254,8 +312,9 @@ async def ingest_document(
     job_id = str(uuid.uuid4())
 
     if action == "url":
-        loader = WebBaseLoader(web_path=parsed["url"])
-        display_source = parsed["url"]
+        url = parsed["url"]
+        loader_fn = lambda: _load_url(url)
+        display_source = url
         file_type = "url"
 
     else:
@@ -271,18 +330,21 @@ async def ingest_document(
             shutil.copyfileobj(file.file, tmp)
             tmp_path = tmp.name
 
-        loader = PyPDFLoader(tmp_path) if suffix == ".pdf" else TextLoader(tmp_path)
+        loader_fn = (
+            (lambda p=tmp_path: PyPDFLoader(p).load())
+            if suffix == ".pdf"
+            else (lambda p=tmp_path: TextLoader(p).load())
+        )
         display_source = file.filename
         file_type = "pdf" if suffix == ".pdf" else "text"
 
-    _ingestion_jobs[job_id] = {
-        "status": "queued",
-        "source": display_source,
-        "queued_at": datetime.now(timezone.utc).isoformat(),
-    }
+    queued_at = datetime.now(timezone.utc).isoformat()
+    _ingestion_jobs[job_id] = {"status": "queued", "source": display_source, "queued_at": queued_at}
+
+    await asyncio.to_thread(_create_log, job_id, display_source, file_type, queued_at)
 
     background_tasks.add_task(
-        _run_ingestion, job_id, loader, display_source, file_type, tmp_path
+        _run_ingestion, job_id, loader_fn, display_source, file_type, tmp_path
     )
 
     return {"job_id": job_id, "status": "queued", "source": display_source}
@@ -303,34 +365,13 @@ class QueryRequest(BaseModel):
 
 @router.post("/query")
 async def query_documents(request: QueryRequest):
-    if sparse_retriever is None:
-        return {
-            "answer": "No documents ingested yet. Please upload documents first.",
-            "sources": [],
-        }
+    # Multi-query expansion over Pinecone hybrid retriever (dense + sparse)
+    # multi_query = MultiQueryRetriever.from_llm(retriever=hybrid_retriever, llm=llm)
 
-    # Step 1 — Dense retriever with MMR for diversity
-    dense_retriever = vector_store.as_retriever(
-        search_type="mmr",
-        search_kwargs={"k": 6, "fetch_k": 20, "lambda_mult": 0.7},
-    )
-
-    # Step 2 — Hybrid retrieval: BM25 (lexical) + dense (semantic)
-    hybrid_retriever = EnsembleRetriever(
-        retrievers=[sparse_retriever, dense_retriever],
-        weights=[0.4, 0.6],
-    )
-
-    # Step 3 — Multi-query expansion
-    multi_query_retriever = MultiQueryRetriever.from_llm(
-        retriever=hybrid_retriever,
-        llm=llm,
-    )
-
-    # Step 4 — Cross-encoder reranking (writes relevance_score into doc.metadata)
+    # Cross-encoder reranking (writes relevance_score into doc.metadata)
     compression_retriever = ContextualCompressionRetriever(
         base_compressor=reranker,
-        base_retriever=multi_query_retriever,
+        base_retriever=hybrid_retriever,
     )
 
     docs = compression_retriever.invoke(request.question)
@@ -341,17 +382,15 @@ async def query_documents(request: QueryRequest):
             "sources": [],
         }
 
-    # Step 5 — Long context reorder
     docs = reorder.transform_documents(docs)
-
-    # Step 6 — Generation
     context = "\n\n".join(doc.page_content for doc in docs)
 
     prompt = ChatPromptTemplate.from_messages(
         [
             (
                 "system",
-                "You are a helpful assistant. Answer the user's question based only on the provided context. If the context doesn't contain enough information to answer, say so.",
+                "You are a helpful assistant. Answer the user's question based only on the provided context. "
+                "If the context doesn't contain enough information to answer, say so.",
             ),
             ("human", "Context:\n{context}\n\nQuestion: {question}"),
         ]
@@ -361,11 +400,9 @@ async def query_documents(request: QueryRequest):
         {"context": context, "question": request.question}
     )
 
-    sources = _build_sources(docs)
+    # sources = _build_sources(docs)
+    result: dict = {"answer": response.content, "sources": {}}
 
-    result: dict = {"answer": response.content, "sources": sources}
-
-    # Step 7 — Evaluation (opt-in, runs all checks in parallel)
     if request.evaluate:
         result["evaluation"] = await _run_evaluation(
             request.question, docs, context, response.content
