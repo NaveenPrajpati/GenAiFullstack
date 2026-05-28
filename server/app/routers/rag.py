@@ -4,10 +4,13 @@ import shutil
 import tempfile
 import uuid
 import requests
+import numpy as np
+import redis.asyncio as aioredis
 from bs4 import BeautifulSoup
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Form, UploadFile, File, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
@@ -59,6 +62,16 @@ if not supabase_url or not supabase_key:
     raise ValueError("SUPABASE_URL and SUPABASE_KEY environment variables must be set")
 supabase: Client = create_client(supabase_url, supabase_key)
 
+# ── Redis semantic cache setup ─────────────────────────────────────────────────
+
+_REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+_redis: aioredis.Redis = aioredis.from_url(_REDIS_URL, decode_responses=True)
+
+_CACHE_PREFIX = "rag:cache:"
+_CACHE_INDEX_PREFIX = "rag:cache_idx:"  # one Redis Set per ingestions scope
+_CACHE_TTL = 60 * 60 * 24              # 24 h
+_CACHE_THRESHOLD = 0.95                # cosine similarity required for a hit
+
 # ── Router & shared models ─────────────────────────────────────────────────────
 
 router = APIRouter(
@@ -85,11 +98,86 @@ _cross_encoder = HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-base")
 reranker = CrossEncoderReranker(model=_cross_encoder, top_n=5)
 reorder = LongContextReorder()
 
+compression_retriever = ContextualCompressionRetriever(
+    base_compressor=reranker,
+    base_retriever=hybrid_retriever,
+)
+
+query_prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            "You are a helpful assistant. Answer the user's question based only on the provided context. "
+            "If the context doesn't contain enough information to answer, say so.",
+        ),
+        ("human", "Context:\n{context}\n\nQuestion: {question}"),
+    ]
+)
+
 # In-memory job tracker — fast status checks without hitting Supabase
 _ingestion_jobs: dict[str, dict] = {}
 
 
+# ── Semantic cache helpers ─────────────────────────────────────────────────────
+
+
+def _scope_key(ingestions: list[str]) -> str:
+    """Stable string that identifies the set of sources being searched."""
+    return "|".join(sorted(ingestions)) if ingestions else "__all__"
+
+
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    va, vb = np.array(a), np.array(b)
+    denom = np.linalg.norm(va) * np.linalg.norm(vb)
+    return float(np.dot(va, vb) / denom) if denom else 0.0
+
+
+async def _cache_lookup(query_embedding: list[float], scope: str) -> dict | None:
+    """Return cached payload if a semantically similar query exists, else None."""
+    try:
+        index_key = f"{_CACHE_INDEX_PREFIX}{scope}"
+        cache_keys = await _redis.smembers(index_key)
+        if not cache_keys:
+            return None
+
+        best_sim, best_payload = 0.0, None
+        for key in cache_keys:
+            raw = await _redis.get(key)
+            if not raw:
+                continue
+            entry = json.loads(raw)
+            sim = _cosine_similarity(query_embedding, entry["embedding"])
+            if sim > best_sim:
+                best_sim, best_payload = sim, entry
+
+        return best_payload if best_sim >= _CACHE_THRESHOLD else None
+    except Exception:
+        logger.warning("Redis cache lookup failed — proceeding without cache")
+        return None
+
+
+async def _cache_save(
+    query_embedding: list[float],
+    scope: str,
+    sources: list,
+    answer: str,
+) -> None:
+    """Persist a new Q&A pair to the semantic cache."""
+    try:
+        entry_id = str(uuid.uuid4())
+        cache_key = f"{_CACHE_PREFIX}{entry_id}"
+        index_key = f"{_CACHE_INDEX_PREFIX}{scope}"
+
+        payload = json.dumps({"embedding": query_embedding, "sources": sources, "answer": answer})
+        await _redis.setex(cache_key, _CACHE_TTL, payload)
+        await _redis.sadd(index_key, cache_key)
+        await _redis.expire(index_key, _CACHE_TTL)
+    except Exception:
+        logger.warning("Redis cache save failed — result not cached")
+
+
 # ── URL loader (BeautifulSoup) ─────────────────────────────────────────────────
+
 
 def _load_url(url: str) -> list[Document]:
     resp = requests.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
@@ -102,6 +190,7 @@ def _load_url(url: str) -> list[Document]:
 
 
 # ── Supabase helpers ───────────────────────────────────────────────────────────
+
 
 def _create_log(doc_id: str, source: str, file_type: str, ingested_at: str) -> None:
     supabase.table("rag_ingestion_logs").insert(
@@ -190,7 +279,9 @@ async def _run_evaluation(question: str, docs: list, context: str, answer: str) 
     relevance_scores = list(results[: len(docs)])
     recall_score = results[-2]
     hallucination_rate = results[-1]
-    precision = sum(relevance_scores) / len(relevance_scores) if relevance_scores else 0.0
+    precision = (
+        sum(relevance_scores) / len(relevance_scores) if relevance_scores else 0.0
+    )
     return {
         "retrieval_precision": round(precision, 3),
         "recall_score": recall_score,
@@ -216,8 +307,12 @@ def _build_sources(docs: list) -> list[dict]:
             {
                 "chunk_text": doc.page_content,
                 "source": doc.metadata.get("source", "unknown"),
-                "page_number": doc.metadata.get("page"),  # PyPDFLoader sets "page" (0-indexed)
-                "confidence_score": round(float(raw_score), 4) if raw_score is not None else None,
+                "page_number": doc.metadata.get(
+                    "page"
+                ),  # PyPDFLoader sets "page" (0-indexed)
+                "confidence_score": (
+                    round(float(raw_score), 4) if raw_score is not None else None
+                ),
                 "doc_id": doc.metadata.get("doc_id"),
             }
         )
@@ -271,12 +366,18 @@ async def _run_ingestion(
         await asyncio.to_thread(
             _update_log,
             job_id,
-            {"status": "completed", "chunks": len(chunks), "completed_at": completed_at},
+            {
+                "status": "completed",
+                "chunks": len(chunks),
+                "completed_at": completed_at,
+            },
         )
 
     except Exception as exc:
         _ingestion_jobs[job_id].update({"status": "failed", "error": str(exc)})
-        await asyncio.to_thread(_update_log, job_id, {"status": "failed", "error": str(exc)})
+        await asyncio.to_thread(
+            _update_log, job_id, {"status": "failed", "error": str(exc)}
+        )
 
     finally:
         if tmp_path and os.path.exists(tmp_path):
@@ -339,7 +440,11 @@ async def ingest_document(
         file_type = "pdf" if suffix == ".pdf" else "text"
 
     queued_at = datetime.now(timezone.utc).isoformat()
-    _ingestion_jobs[job_id] = {"status": "queued", "source": display_source, "queued_at": queued_at}
+    _ingestion_jobs[job_id] = {
+        "status": "queued",
+        "source": display_source,
+        "queued_at": queued_at,
+    }
 
     await asyncio.to_thread(_create_log, job_id, display_source, file_type, queued_at)
 
@@ -361,6 +466,7 @@ async def ingest_status(job_id: str):
 class QueryRequest(BaseModel):
     question: str
     evaluate: bool = False
+    ingestions: list[str] = []
 
 
 @router.post("/query")
@@ -368,10 +474,25 @@ async def query_documents(request: QueryRequest):
     # Multi-query expansion over Pinecone hybrid retriever (dense + sparse)
     # multi_query = MultiQueryRetriever.from_llm(retriever=hybrid_retriever, llm=llm)
 
+    pinecone_filter = (
+        {"doc_id": {"$in": request.ingestions}} if request.ingestions else None
+    )
+    base = (
+        PineconeHybridSearchRetriever(
+            embeddings=embeddings,
+            sparse_encoder=bm25_encoder,
+            index=index,
+            top_k=10,
+            filter=pinecone_filter,
+        )
+        if pinecone_filter
+        else hybrid_retriever
+    )
+
     # Cross-encoder reranking (writes relevance_score into doc.metadata)
     compression_retriever = ContextualCompressionRetriever(
         base_compressor=reranker,
-        base_retriever=hybrid_retriever,
+        base_retriever=base,
     )
 
     docs = compression_retriever.invoke(request.question)
@@ -409,3 +530,74 @@ async def query_documents(request: QueryRequest):
         )
 
     return result
+
+
+@router.post("/query/stream")
+async def query_documents_stream(request: QueryRequest):
+    invoke_kwargs = (
+        {"filter": {"doc_id": {"$in": request.ingestions}}} if request.ingestions else {}
+    )
+    scope = _scope_key(request.ingestions)
+
+    async def generate():
+        try:
+            # ── Semantic cache check ───────────────────────────────────────────
+            query_embedding = await asyncio.to_thread(
+                embeddings.embed_query, request.question
+            )
+            cached = await _cache_lookup(query_embedding, scope)
+
+            if cached:
+                logger.info("Semantic cache hit: %s", request.question[:60])
+                yield f"data: {json.dumps({'type': 'sources', 'sources': cached['sources'], 'cached': True})}\n\n"
+                # Stream cached answer word-by-word for consistent UX
+                for word in cached["answer"].split(" "):
+                    yield f"data: {json.dumps({'type': 'token', 'token': word + ' '})}\n\n"
+                    await asyncio.sleep(0)  # yield event-loop control between words
+                yield f"data: {json.dumps({'type': 'done', 'cached': True})}\n\n"
+                return
+
+            # ── Cache miss: full retrieval + generation ────────────────────────
+            docs = await asyncio.to_thread(
+                compression_retriever.invoke, request.question, **invoke_kwargs
+            )
+
+            if not docs:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'No relevant documents found. Please upload documents first.'})}\n\n"
+                return
+
+            docs = reorder.transform_documents(docs)
+            context = "\n\n".join(doc.page_content for doc in docs)
+
+            sources = _build_sources(docs)
+            yield f"data: {json.dumps({'type': 'sources', 'sources': sources})}\n\n"
+
+            full_answer = ""
+            async for chunk in (query_prompt | llm).astream(
+                {"context": context, "question": request.question}
+            ):
+                token = chunk.content
+                if token:
+                    full_answer += token
+                    yield f"data: {json.dumps({'type': 'token', 'token': token})}\n\n"
+
+            # Save to semantic cache (fire-and-forget, never blocks the stream)
+            asyncio.ensure_future(_cache_save(query_embedding, scope, sources, full_answer))
+
+            if request.evaluate:
+                evaluation = await _run_evaluation(
+                    request.question, docs, context, full_answer
+                )
+                yield f"data: {json.dumps({'type': 'evaluation', 'evaluation': evaluation})}\n\n"
+
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+        except Exception as exc:
+            logger.exception("Stream generation failed")
+            yield f"data: {json.dumps({'type': 'error', 'message': str(exc)})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

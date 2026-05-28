@@ -28,10 +28,13 @@ export default function RagChatbotScreen() {
   const [isUploading, setIsUploading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
   const [asset, setAsset] = useState<DocumentPickerAsset | null>(null);
+  const [ingestions, setIngestions] = useState([]);
+  const [selectedIngestions, setSelectedIngestions] = useState([]);
 
   async function getAllIngestedFiles() {
     axios.get(`${BASE_URL}${RagApis.getallFiles}`).then((res) => {
-      res.data;
+      console.log(res.data.data);
+      setIngestions(res.data.data);
     });
   }
 
@@ -123,7 +126,7 @@ export default function RagChatbotScreen() {
       const response = await fetch(`${BASE_URL}/rag/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: userMessage, evaluate: true }),
+        body: JSON.stringify({ question: userMessage, evaluate: true, ingestions }),
       });
       if (!response.ok) throw new Error(`Error: ${response.status}`);
       const data = await response.json();
@@ -131,6 +134,60 @@ export default function RagChatbotScreen() {
         ...updated,
         { role: 'assistant', content: data.answer ?? data.response ?? JSON.stringify(data) },
       ]);
+    } catch (err: unknown) {
+      setMessages([
+        ...updated,
+        {
+          role: 'assistant',
+          content: `Error: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        },
+      ]);
+    } finally {
+      setLoading(false);
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    }
+  };
+  const handleSendStream = async () => {
+    if (!inputText.trim() || loading) return;
+    const userMessage = inputText.trim();
+    setInputText('');
+    const updated: Message[] = [...messages, { role: 'user', content: userMessage }];
+    setMessages(updated);
+    setLoading(true);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+
+    try {
+      const response = await fetch(`${BASE_URL}/rag/query/stream`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: userMessage,
+          evaluate: true,
+          ingestions: selectedIngestions,
+        }),
+      });
+      if (!response.ok) throw new Error(`Error: ${response.status}`);
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('Response body is not readable');
+      const decoder = new TextDecoder();
+      let accumulated = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        for (const line of decoder.decode(value).split('\n')) {
+          if (!line.startsWith('data: ')) continue;
+          const event = JSON.parse(line.slice(6));
+
+          if (event.type === 'token') {
+            accumulated += event.token;
+            setLoading(false);
+            setMessages([...updated, { role: 'assistant', content: accumulated }]);
+          }
+        }
+      }
     } catch (err: unknown) {
       setMessages([
         ...updated,
@@ -209,6 +266,24 @@ export default function RagChatbotScreen() {
           </View>
         </View>
 
+        <ScrollView className="max-h-20">
+          {ingestions.map((it) => (
+            <TouchableOpacity
+              onPress={() => {
+                if (selectedIngestions.includes(it.doc_id)) {
+                  const arr = selectedIngestions.filter((ing) => ing != it.doc_id);
+                  setSelectedIngestions(arr);
+                } else setSelectedIngestions((pre) => [...pre, it.doc_id]);
+              }}
+              key={it.doc_id}
+              className="flex-row items-center gap-1">
+              <Text className={`${selectedIngestions.includes(it.doc_id) ? 'bg-blue-100' : ''}`}>
+                {it?.source}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
         <ScrollView
           ref={scrollRef}
           className="flex-1 px-4 py-5"
@@ -271,7 +346,7 @@ export default function RagChatbotScreen() {
               blurOnSubmit
             />
             <TouchableOpacity
-              onPress={handleSend}
+              onPress={handleSendStream}
               disabled={!inputText.trim() || loading}
               className={`h-12 w-12 items-center justify-center rounded-2xl ${inputText.trim() && !loading ? 'bg-blue-600' : 'bg-gray-200'}`}
               activeOpacity={0.8}>

@@ -25,14 +25,14 @@ export default function DrawerContent(props: DrawerContentComponentProps) {
 
   return (
     <View className="flex-1 bg-gray-900">
-      <View className="px-5 py-5 border-b border-gray-800">
+      <View className="border-b border-gray-800 px-5 py-5">
         <View className="flex-row items-center gap-3">
-          <View className="w-9 h-9 rounded-lg bg-indigo-600 items-center justify-center">
-            <Text className="text-white font-bold text-sm">AI</Text>
+          <View className="h-9 w-9 items-center justify-center rounded-lg bg-indigo-600">
+            <Text className="text-sm font-bold text-white">AI</Text>
           </View>
           <View>
-            <Text className="text-white font-semibold text-base">AI Toolkit</Text>
-            <Text className="text-gray-400 text-xs">Full Stack Apps</Text>
+            <Text className="text-base font-semibold text-white">AI Toolkit</Text>
+            <Text className="text-xs text-gray-400">Full Stack Apps</Text>
           </View>
         </View>
       </View>
@@ -48,10 +48,10 @@ export default function DrawerContent(props: DrawerContentComponentProps) {
               <TouchableOpacity
                 key={item.href}
                 onPress={() => handleNavigate(item.href)}
-                className={`mx-2 my-0.5 px-3 py-2.5 rounded-lg flex-row items-center gap-3 ${active ? 'bg-indigo-600' : ''}`}
+                className={`mx-2 my-0.5 flex-row items-center gap-3 rounded-lg px-3 py-2.5 ${active ? 'bg-indigo-600' : ''}`}
                 activeOpacity={0.7}>
                 <View
-                  className={`w-8 h-8 rounded-lg items-center justify-center ${active ? 'bg-indigo-500' : 'bg-gray-800'}`}>
+                  className={`h-8 w-8 items-center justify-center rounded-lg ${active ? 'bg-indigo-500' : 'bg-gray-800'}`}>
                   <Text className="text-base">{item.emoji}</Text>
                 </View>
                 <View className="flex-1">
@@ -59,17 +59,17 @@ export default function DrawerContent(props: DrawerContentComponentProps) {
                     className={`text-sm font-medium ${active ? 'text-white' : 'text-gray-300'}`}>
                     {item.label}
                   </Text>
-                  <Text className="text-gray-500 text-xs">{item.desc}</Text>
+                  <Text className="text-xs text-gray-500">{item.desc}</Text>
                 </View>
-                {active && <View className="w-1.5 h-1.5 rounded-full bg-indigo-400" />}
+                {active && <View className="h-1.5 w-1.5 rounded-full bg-indigo-400" />}
               </TouchableOpacity>
             );
           })}
         </View>
       </DrawerContentScrollView>
 
-      <View className="p-4 border-t border-gray-800">
-        <Text className="text-gray-600 text-xs text-center">Gen Ai Apps</Text>
+      <View className="border-t border-gray-800 p-4">
+        <Text className="text-center text-xs text-gray-600">Gen Ai Apps</Text>
       </View>
     </View>
   );
