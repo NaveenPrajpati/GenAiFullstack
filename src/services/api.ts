@@ -5,4 +5,6 @@ export const BASE_URL =
 
 export const RagApis = {
   getallFiles: '/rag/get-files',
+  getallChats: '/chat',
+  getallMessages: (id: string) => '/chat/'.concat(id, '/messages'),
 };
