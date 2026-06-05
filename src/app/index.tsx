@@ -1,5 +1,5 @@
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
+import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 const APPS = [
   {
@@ -12,9 +12,9 @@ const APPS = [
     bar: 'bg-blue-500',
   },
   {
-    href: '/summarizer',
+    href: '/meal-planner',
     emoji: '📝',
-    title: 'Summarizer',
+    title: 'Meal Plannner',
     desc: 'Transform long articles, reports, and meeting notes into clear, concise summaries.',
     iconBg: 'bg-violet-100',
     btnBg: 'bg-violet-600',

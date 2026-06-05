@@ -8,3 +8,8 @@ export const RagApis = {
   getallChats: '/chat',
   getallMessages: (id: string) => '/chat/'.concat(id, '/messages'),
 };
+export const MealPlannerApis = {
+  query: BASE_URL + '/meal-planner/query',
+  getallChats: '/chat',
+  getallMessages: (id: string) => '/chat/'.concat(id, '/messages'),
+};

@@ -1,15 +1,29 @@
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import { MealPlannerApis } from '@/services/api';
+import axios from 'axios';
 import { useState } from 'react';
-import { useStreaming } from '../hooks/useStreaming';
+import { Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Spinner from '../components/ui/Spinner';
+import { useStreaming } from '../hooks/useStreaming';
 
-export default function SummarizerScreen() {
+export default function Mealplanner() {
   const [inputText, setInputText] = useState('');
   const { text, loading, error, stream, stop, reset } = useStreaming();
 
   const handleSubmit = () => {
     if (!inputText.trim() || loading) return;
-    stream('/app2/summarize/stream', { text: inputText });
+    stream('/meal-planner/query', { text: inputText });
+  };
+  const handleAsk = () => {
+    console.log(MealPlannerApis.query);
+
+    axios
+      .post(MealPlannerApis.query, { text: inputText })
+      .then((res) => {
+        console.log(res.data);
+      })
+      .catch((err) => {
+        console.log(err);
+      });
   };
 
   const handleClear = () => {
@@ -53,23 +67,23 @@ export default function SummarizerScreen() {
               {inputText.length > 0 && (
                 <TouchableOpacity
                   onPress={handleClear}
-                  className="rounded-lg bg-gray-100 px-3 py-1.5"
+                  className="rounded-lg bg-gray-100 p-4"
                   activeOpacity={0.7}>
                   <Text className="text-sm text-gray-600">Clear</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
-                onPress={loading ? stop : handleSubmit}
+                onPress={handleAsk}
                 disabled={!inputText.trim() && !loading}
-                className={`rounded-lg px-4 py-1.5 ${loading ? 'bg-red-500' : 'bg-violet-600'} ${!inputText.trim() && !loading ? 'opacity-50' : ''}`}
+                className={`rounded-lg p-4 ${loading ? 'bg-red-500' : 'bg-violet-600'} ${!inputText.trim() && !loading ? 'opacity-50' : ''}`}
                 activeOpacity={0.8}>
                 {loading ? (
                   <View className="flex-row items-center gap-2">
                     <Spinner size="small" color="white" />
-                    <Text className="text-sm font-medium text-white">Stop</Text>
+                    <Text className="text-xl font-medium text-white">Stop</Text>
                   </View>
                 ) : (
-                  <Text className="text-sm font-medium text-white">Summarize</Text>
+                  <Text className="text-xl font-medium text-white">Ask</Text>
                 )}
               </TouchableOpacity>
             </View>
