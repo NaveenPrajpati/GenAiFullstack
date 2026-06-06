@@ -1,19 +1,40 @@
-import { View, Text, TouchableOpacity, Platform } from 'react-native';
-import { DrawerContentScrollView, DrawerContentComponentProps } from '@react-navigation/drawer';
-import { useRouter, usePathname } from 'expo-router';
+import { useAuth } from '@/context/AuthContext';
+import { DrawerContentComponentProps, DrawerContentScrollView } from '@react-navigation/drawer';
+import { usePathname, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Platform, Text, TouchableOpacity, View } from 'react-native';
 
 const NAV_ITEMS = [
   { href: '/', emoji: '🏠', label: 'Home', desc: 'Dashboard' },
   { href: '/rag-chatbot', emoji: '🤖', label: 'RAG Chatbot', desc: 'Document Q&A' },
-  { href: '/summarizer', emoji: '📝', label: 'Summarizer', desc: 'Text summary' },
+  { href: '/meal-planner', emoji: '📝', label: 'Meal Planner', desc: 'Plan your weekly diet' },
   { href: '/web-scraper', emoji: '🌐', label: 'Web Scraper', desc: 'URL to summary' },
   { href: '/email-assistant', emoji: '✉️', label: 'Email Assistant', desc: 'Email helper' },
   { href: '/recipe-generator', emoji: '🍳', label: 'Recipe Generator', desc: 'Cook with AI' },
 ] as const;
 
+function formatExpiry(expiresAt: string | null): string {
+  if (!expiresAt) return '';
+  const diff = new Date(expiresAt).getTime() - Date.now();
+  if (diff <= 0) return 'Expired';
+  const h = Math.floor(diff / 3_600_000);
+  const m = Math.floor((diff % 3_600_000) / 60_000);
+  return h > 0 ? `Expires in ${h}h ${m}m` : `Expires in ${m}m`;
+}
+
+function getInitials(user: { first_name?: string; last_name?: string; name?: string }): string {
+  if (user.first_name && user.last_name) {
+    return (user.first_name[0] + user.last_name[0]).toUpperCase();
+  }
+  if (user.name) return user.name.slice(0, 2).toUpperCase();
+  return 'U';
+}
+
 export default function DrawerContent(props: DrawerContentComponentProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const { user, logout } = useAuth();
+  const [expiry, setExpiry] = useState(() => formatExpiry(user?.expires_at ?? null));
 
   const isActive = (href: string) =>
     href === '/' ? pathname === '/' || pathname === '' : pathname === href;
@@ -23,9 +44,18 @@ export default function DrawerContent(props: DrawerContentComponentProps) {
     if (Platform.OS !== 'web') props.navigation.closeDrawer();
   };
 
+  // Refresh expiry label every minute for guest users
+  useEffect(() => {
+    if (!user?.is_guest || !user.expires_at) return;
+    setExpiry(formatExpiry(user.expires_at));
+    const id = setInterval(() => setExpiry(formatExpiry(user.expires_at!)), 60_000);
+    return () => clearInterval(id);
+  }, [user]);
+
   return (
-    <View className="flex-1 bg-gray-900">
-      <View className="border-b border-gray-800 px-5 py-5">
+    <View className="flex-1 bg-gray-800" style={{ paddingTop: Platform.OS !== 'web' ? 40 : 0 }}>
+      {/* Header */}
+      <View className="border-b border-gray-700 px-5 py-4">
         <View className="flex-row items-center gap-3">
           <View className="h-9 w-9 items-center justify-center rounded-lg bg-indigo-600">
             <Text className="text-sm font-bold text-white">AI</Text>
@@ -37,6 +67,49 @@ export default function DrawerContent(props: DrawerContentComponentProps) {
         </View>
       </View>
 
+      {/* User profile section */}
+      {user && (
+        <View className="border-b border-gray-700 px-4 py-4">
+          <View className="flex-row items-center gap-3">
+            <View className="h-10 w-10 items-center justify-center rounded-full bg-indigo-500">
+              <Text className="text-sm font-bold text-white">{getInitials(user)}</Text>
+            </View>
+            <View className="flex-1 overflow-hidden">
+              <Text className="text-sm font-semibold text-white" numberOfLines={1}>
+                {user.first_name} {user.last_name}
+              </Text>
+              <Text className="text-xs text-gray-400" numberOfLines={1}>
+                {user.email}
+              </Text>
+            </View>
+            {user.is_guest && (
+              <View className="rounded-md bg-amber-500/20 px-2 py-0.5">
+                <Text className="text-xs font-medium text-amber-400">Guest</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Guest expiry + verify email CTA */}
+          {user.is_guest && (
+            <View className="mt-3 rounded-xl bg-gray-700 p-3">
+              <View className="mb-2 flex-row items-center gap-1.5">
+                <Text className="text-xs text-amber-400">⏱ {expiry}</Text>
+              </View>
+              <Text className="mb-2.5 text-xs leading-relaxed text-gray-400">
+                Save your session — create a free account before it expires.
+              </Text>
+              <TouchableOpacity
+                onPress={() => handleNavigate('/auth/convert-guest')}
+                className="items-center rounded-lg bg-indigo-600 py-2"
+                activeOpacity={0.8}>
+                <Text className="text-xs font-semibold text-white">Verify Email & Upgrade</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* Nav items */}
       <DrawerContentScrollView
         {...props}
         contentContainerStyle={{ flexGrow: 1 }}
@@ -68,8 +141,17 @@ export default function DrawerContent(props: DrawerContentComponentProps) {
         </View>
       </DrawerContentScrollView>
 
-      <View className="border-t border-gray-800 p-4">
-        <Text className="text-center text-xs text-gray-600">Gen Ai Apps</Text>
+      {/* Logout */}
+      <View className="border-t border-gray-700 p-4">
+        <TouchableOpacity
+          onPress={logout}
+          className="flex-row items-center gap-3 rounded-lg px-3 py-2.5"
+          activeOpacity={0.7}>
+          <View className="h-8 w-8 items-center justify-center rounded-lg bg-gray-800">
+            <Text className="text-base">🚪</Text>
+          </View>
+          <Text className="text-sm font-medium text-gray-400">Sign Out</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );

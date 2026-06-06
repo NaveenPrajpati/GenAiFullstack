@@ -1,11 +1,11 @@
-import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
-import { useRouter, usePathname } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
+import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const NAV_ITEMS = [
   { href: '/', emoji: '🏠', label: 'Home' },
   { href: '/rag-chatbot', emoji: '🤖', label: 'Chatbot' },
-  { href: '/summarizer', emoji: '📝', label: 'Summary' },
+  { href: '/meal-planner', emoji: '📝', label: 'Summary' },
   { href: '/web-scraper', emoji: '🌐', label: 'Scraper' },
   { href: '/email-assistant', emoji: '✉️', label: 'Email' },
   { href: '/recipe-generator', emoji: '🍳', label: 'Recipe' },
@@ -20,7 +20,7 @@ export default function BottomNav() {
     href === '/' ? pathname === '/' || pathname === '' : pathname === href;
 
   return (
-    <View className="bg-white border-t border-gray-200" style={{ paddingBottom: insets.bottom }}>
+    <View className="border-t border-gray-200 bg-white" style={{ paddingBottom: insets.bottom }}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -31,15 +31,15 @@ export default function BottomNav() {
             <TouchableOpacity
               key={item.href}
               onPress={() => router.navigate(item.href)}
-              className="items-center py-2 px-4"
+              className="items-center px-4 py-2"
               activeOpacity={0.7}>
               <Text className="text-xl">{item.emoji}</Text>
               <Text
-                className={`text-xs mt-0.5 ${active ? 'text-indigo-600 font-semibold' : 'text-gray-500'}`}>
+                className={`mt-0.5 text-xs ${active ? 'font-semibold text-indigo-600' : 'text-gray-500'}`}>
                 {item.label}
               </Text>
               {active && (
-                <View className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-t-full" />
+                <View className="absolute right-0 bottom-0 left-0 h-0.5 rounded-t-full bg-indigo-600" />
               )}
             </TouchableOpacity>
           );

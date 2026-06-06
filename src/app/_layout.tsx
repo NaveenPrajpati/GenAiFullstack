@@ -1,10 +1,33 @@
 import DrawerContent from '@/components/layout/DrawerContent';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { DrawerToggleButton } from '@react-navigation/drawer';
+import { useRouter, useSegments } from 'expo-router';
 import { Drawer } from 'expo-router/drawer';
+import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import '../../global.css';
-export default function MainLayout() {
+
+function AppDrawer() {
+  const { token, isReady } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
   const isWeb = Platform.OS === 'web';
+  const [mounted, setMounted] = useState(false);
+
+  // Wait for the navigator to mount before any programmatic navigation
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted || !isReady) return;
+    const inAuth = segments[0] === 'auth';
+    if (!token && !inAuth) {
+      router.replace('/auth/login');
+    } else if (token && inAuth) {
+      router.replace('/');
+    }
+  }, [token, segments, mounted, isReady]);
 
   return (
     <Drawer
@@ -26,6 +49,30 @@ export default function MainLayout() {
       <Drawer.Screen name="web-scraper" options={{ drawerLabel: 'Web Scraper' }} />
       <Drawer.Screen name="email-assistant" options={{ drawerLabel: 'Email Assistant' }} />
       <Drawer.Screen name="recipe-generator" options={{ drawerLabel: 'Recipe Generator' }} />
+      <Drawer.Screen
+        name="auth/login"
+        options={{ drawerItemStyle: { display: 'none' }, headerShown: false, swipeEnabled: false }}
+      />
+      <Drawer.Screen
+        name="auth/signup"
+        options={{ drawerItemStyle: { display: 'none' }, headerShown: false, swipeEnabled: false }}
+      />
+      <Drawer.Screen
+        name="auth/convert-guest"
+        options={{
+          drawerItemStyle: { display: 'none' },
+          headerTitle: 'Complete Registration',
+          swipeEnabled: false,
+        }}
+      />
     </Drawer>
+  );
+}
+
+export default function MainLayout() {
+  return (
+    <AuthProvider>
+      <AppDrawer />
+    </AuthProvider>
   );
 }
