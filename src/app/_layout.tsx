@@ -4,15 +4,15 @@ import { DrawerToggleButton } from '@react-navigation/drawer';
 import { useRouter, useSegments } from 'expo-router';
 import { Drawer } from 'expo-router/drawer';
 import { useEffect, useState } from 'react';
-import { Platform } from 'react-native';
+import { useWindowDimensions } from 'react-native';
 import '../../global.css';
 
 function AppDrawer() {
   const { token, isReady } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const isWeb = Platform.OS === 'web';
   const [mounted, setMounted] = useState(false);
+  const { width } = useWindowDimensions();
 
   // Wait for the navigator to mount before any programmatic navigation
   useEffect(() => {
@@ -28,24 +28,27 @@ function AppDrawer() {
       router.replace('/');
     }
   }, [token, segments, mounted, isReady]);
-
+  const isMobile = width <= 500;
   return (
     <Drawer
       drawerContent={(props) => <DrawerContent {...props} />}
       screenOptions={{
-        headerShown: !isWeb,
+        headerShown: isMobile,
         headerTitle: 'All apps',
         headerStyle: { backgroundColor: '#ffffff', elevation: 0, shadowOpacity: 0 },
         headerShadowVisible: false,
         headerLeft: () => <DrawerToggleButton tintColor="#374151" />,
-        drawerType: isWeb ? 'permanent' : 'front',
+        drawerType: isMobile ? 'front' : 'permanent',
         drawerStyle: { width: 256, backgroundColor: '#111827' },
-        swipeEnabled: !isWeb,
+        swipeEnabled: isMobile,
         overlayColor: 'rgba(0,0,0,0.5)',
       }}>
       <Drawer.Screen name="index" options={{ drawerLabel: 'Home' }} />
       <Drawer.Screen name="rag-chatbot" options={{ headerTitle: 'Rag Chatbot' }} />
       <Drawer.Screen name="meal-planner" options={{ drawerLabel: 'Meal planner' }} />
+      <Drawer.Screen name="learning" options={{ drawerLabel: 'Learning', headerTitle: 'Learning' }} />
+      <Drawer.Screen name="learning-tracker" options={{ drawerLabel: 'Learning Tracker' }} />
+      <Drawer.Screen name="personal-assistant" options={{ drawerLabel: 'Personal Assistant' }} />
       <Drawer.Screen name="web-scraper" options={{ drawerLabel: 'Web Scraper' }} />
       <Drawer.Screen name="email-assistant" options={{ drawerLabel: 'Email Assistant' }} />
       <Drawer.Screen name="recipe-generator" options={{ drawerLabel: 'Recipe Generator' }} />

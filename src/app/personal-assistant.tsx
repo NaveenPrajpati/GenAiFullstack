@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Spinner from '../components/ui/Spinner';
 
-export default function Mealplanner() {
+export default function PersonalAssistant() {
   const { token, user } = useAuth();
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);

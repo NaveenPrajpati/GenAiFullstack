@@ -1,25 +1,55 @@
 import { apiClient, useAuth } from '@/context/AuthContext';
-import { MealPlannerApis } from '@/services/api';
+import { LearningTrackerApis, MealPlannerApis } from '@/services/api';
 import { useEffect, useState } from 'react';
 import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Spinner from '../components/ui/Spinner';
 
-export default function Mealplanner() {
+type RoadmapTopic = {
+  id: string;
+  order: number;
+  title: string;
+  description: string;
+  prerequisites: string[];
+  estimated_hours: number;
+  resources: string[];
+  covered: boolean | null;
+};
+
+type ApprovalItem = {
+  _id: string;
+  userId: string;
+  threadId: string;
+  action: string;
+  status: string;
+  createdAt: string;
+  payload: {
+    id: string;
+    title: string;
+    summary?: string;
+    status?: string;
+    total_estimated_hours?: number;
+    stages?: string[];
+    topics?: RoadmapTopic[];
+    [key: string]: unknown;
+  };
+};
+
+export default function LearningTracker() {
   const { token, user } = useAuth();
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [response, setResponse] = useState(null); // last /query result
-  const [allApprovals, setAllApprovals] = useState([]);
+  const [allApprovals, setAllApprovals] = useState<ApprovalItem[]>([]);
   const [meals, setMeals] = useState([]);
-  const [plans, setPlans] = useState([]);
+  const [plans, setRoadmaps] = useState([]);
   const [resolvingId, setResolvingId] = useState(null); // per-row spinner
-  const [selectedPlan, setSelectedPlan] = useState<null | String>(null);
+  const [selectedPlan, setSelectedRoadmap] = useState<null | String>(null);
 
   const fetchApprovals = () => {
     if (!token) return;
     apiClient(token)
-      .get(MealPlannerApis.approval)
+      .get(LearningTrackerApis.approvals)
       .then((res) => setAllApprovals(res.data.result || []))
       .catch((err) => console.log('fetchApprovals', err));
   };
@@ -35,17 +65,17 @@ export default function Mealplanner() {
   const fetchplans = () => {
     if (!token) return;
     apiClient(token)
-      .get(MealPlannerApis.plans)
+      .get(LearningTrackerApis.roadmaps)
       .then((res) => {
-        setPlans(res.data.result || []);
-        setSelectedPlan(res.data.result > 0 ? res.data.result[0].id : null);
+        setRoadmaps(res.data.result || []);
+        setSelectedRoadmap(res.data.result > 0 ? res.data.result[0].id : null);
       })
       .catch((err) => console.log('fetchApprovals', err));
   };
 
-  useEffect(() => {
-    fetchMeals();
-  }, [selectedPlan]);
+  // useEffect(() => {
+  //   fetchMeals();
+  // }, [selectedPlan]);
   useEffect(() => {
     fetchApprovals();
     fetchplans();
@@ -58,7 +88,7 @@ export default function Mealplanner() {
     setResponse(null);
 
     apiClient(token)
-      .post(MealPlannerApis.query, { text: inputText, plan_id: selectedPlan })
+      .post(LearningTrackerApis.query, { text: inputText })
       .then((res) => {
         const data = res.data;
         setResponse(data);
@@ -94,10 +124,10 @@ export default function Mealplanner() {
   };
 
   const resolve = (item, decision) => {
-    setResolvingId(item.id);
+    setResolvingId(item._id);
     setError('');
     apiClient(token)
-      .post(MealPlannerApis.approval, { thread_id: item.thread_id, decision })
+      .post(LearningTrackerApis.approvals, { thread_id: item.threadId, decision })
       .then(() => fetchApprovals()) // re-pull so status flips
       .catch((err) => {
         // backend 404s if the thread is gone (e.g. server restarted on MemorySaver)
@@ -121,23 +151,8 @@ export default function Mealplanner() {
   return (
     <View className="flex-1 bg-gray-50">
       <View className="border-b border-gray-200 bg-white px-5 py-4">
-        <Text className="text-xl font-bold text-gray-900">Meal planner</Text>
-        <Text className="mt-1 text-sm text-gray-500">Plan your meals</Text>
-        {user && (
-          <View className="flex-row items-center gap-3">
-            <Text className="text-xs text-gray-400" numberOfLines={1}>
-              Diet :{user.diet}
-            </Text>
-            <Text className="text-xs text-gray-400" numberOfLines={1}>
-              Protien target :{user.protein_target}g
-            </Text>
-            {user.is_guest && (
-              <View className="rounded-md bg-amber-500/20 px-2 py-0.5">
-                <Text className="text-xs font-medium text-amber-400">Guest</Text>
-              </View>
-            )}
-          </View>
-        )}
+        <Text className="text-xl font-bold text-gray-900">Learning Tracker</Text>
+        <Text className="mt-1 text-sm text-gray-500">Plan your roadmap</Text>
       </View>
 
       {meals.length > 0 && (
@@ -164,16 +179,16 @@ export default function Mealplanner() {
           {plans.map((it, ind) => (
             <TouchableOpacity
               onPress={() => {
-                setSelectedPlan(it.id);
+                setSelectedRoadmap(it.id);
               }}
               key={it.id}
               className={`mb-2 rounded-xl border-2 p-2 ${selectedPlan == it.id ? 'border-blue-400' : 'border-gray-100'} pb-2`}>
               <View className="flex-1">
-                <Text className="text-sm text-gray-800">Plan: {ind + 1}</Text>
+                <Text className="text-sm text-gray-800">Roadmap: {it.title}</Text>
               </View>
 
               <View className="flex-row items-center gap-x-2">
-                <Text className="text-sm text-gray-800">Week Starts: {it.week_start},</Text>
+                <Text className="text-sm text-gray-800">Topics: {it.topics.length},</Text>
                 <Text className="text-sm text-gray-800">Status: {it.status}</Text>
               </View>
             </TouchableOpacity>
@@ -261,42 +276,110 @@ export default function Mealplanner() {
 
         {/* Approval queue */}
         {allApprovals.length > 0 && (
-          <View className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
+          <View className="mb-4">
             <Text className="mb-3 text-sm font-semibold text-gray-900">Pending approvals</Text>
-            {allApprovals.map((it) => (
-              <View
-                key={it.id}
-                className="mb-2 flex-row items-center justify-between border-b border-gray-100 pb-2">
-                <View className="flex-1">
-                  <Text className="text-sm text-gray-800">{it.action_type}</Text>
-                  <Text className="text-xs text-gray-400">Status: {it.status}</Text>
-                </View>
-                {it.status === 'pending' ? (
-                  <View className="flex-row gap-2">
-                    <TouchableOpacity
-                      disabled={resolvingId === it.id}
-                      onPress={() => resolve(it, 'approved')}
-                      className="rounded-lg bg-green-600 px-3 py-2"
-                      activeOpacity={0.8}>
-                      {resolvingId === it.id ? (
-                        <Spinner size="small" color="white" />
-                      ) : (
-                        <Text className="text-xs font-medium text-white">Approve</Text>
-                      )}
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      disabled={resolvingId === it.id}
-                      onPress={() => resolve(it, 'rejected')}
-                      className="rounded-lg bg-gray-200 px-3 py-2"
-                      activeOpacity={0.8}>
-                      <Text className="text-xs font-medium text-gray-700">Reject</Text>
-                    </TouchableOpacity>
+            {allApprovals.map((it) => {
+              const p = it.payload ?? {};
+              return (
+                <View key={it._id} className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
+                  {/* Header row */}
+                  <View className="mb-2 flex-row items-start justify-between">
+                    <View className="flex-1 pr-2">
+                      <Text className="text-base font-semibold text-gray-900">{p.title}</Text>
+                      <Text className="mt-0.5 text-xs text-gray-400 capitalize">
+                        {it.action?.replace(/_/g, ' ')} · {it.status}
+                      </Text>
+                    </View>
+                    <View
+                      className={`rounded-full px-2 py-0.5 ${it.status === 'pending' ? 'bg-amber-100' : 'bg-gray-100'}`}>
+                      <Text
+                        className={`text-xs font-medium capitalize ${it.status === 'pending' ? 'text-amber-700' : 'text-gray-500'}`}>
+                        {it.status}
+                      </Text>
+                    </View>
                   </View>
-                ) : (
-                  <Text className="text-xs text-gray-400 capitalize">{it.status}</Text>
-                )}
-              </View>
-            ))}
+
+                  {/* Summary */}
+                  {!!p.summary && (
+                    <Text className="mb-3 text-xs leading-relaxed text-gray-600">{p.summary}</Text>
+                  )}
+
+                  {/* Meta row */}
+                  <View className="mb-3 flex-row flex-wrap gap-2">
+                    {!!p.total_estimated_hours && (
+                      <View className="rounded-md bg-violet-50 px-2 py-1">
+                        <Text className="text-xs text-violet-700">
+                          {p.total_estimated_hours}h total
+                        </Text>
+                      </View>
+                    )}
+                    {(p.stages ?? []).map((stage) => (
+                      <View key={stage} className="rounded-md bg-blue-50 px-2 py-1">
+                        <Text className="text-xs text-blue-700">{stage}</Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  {/* Topics list */}
+                  {(p.topics ?? []).length > 0 && (
+                    <View className="mb-3 rounded-lg bg-gray-50 p-3">
+                      <Text className="mb-2 text-xs font-semibold text-gray-700">
+                        Topics ({(p.topics ?? []).length})
+                      </Text>
+                      {(p.topics ?? []).map((topic) => (
+                        <View
+                          key={topic.id}
+                          className="mb-2 flex-row items-start border-b border-gray-100 pb-2 last:mb-0 last:border-0 last:pb-0">
+                          <View className="mt-0.5 mr-2 h-5 w-5 items-center justify-center rounded-full bg-violet-100">
+                            <Text className="text-xs font-semibold text-violet-700">
+                              {topic.order}
+                            </Text>
+                          </View>
+                          <View className="flex-1">
+                            <Text className="text-xs font-medium text-gray-800">{topic.title}</Text>
+                            <Text className="mt-0.5 text-xs text-gray-500" numberOfLines={2}>
+                              {topic.description}
+                            </Text>
+                            <Text className="mt-0.5 text-xs text-violet-500">
+                              {topic.estimated_hours}h
+                              {topic.prerequisites?.length > 0
+                                ? ` · needs: ${topic.prerequisites.join(', ')}`
+                                : ''}
+                            </Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  {/* Action buttons */}
+                  {it.status === 'pending' ? (
+                    <View className="flex-row gap-2">
+                      <TouchableOpacity
+                        disabled={resolvingId === it._id}
+                        onPress={() => resolve(it, 'approved')}
+                        className="flex-1 items-center rounded-lg bg-green-600 py-2.5"
+                        activeOpacity={0.8}>
+                        {resolvingId === it._id ? (
+                          <Spinner size="small" color="white" />
+                        ) : (
+                          <Text className="text-sm font-medium text-white">Approve</Text>
+                        )}
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        disabled={resolvingId === it._id}
+                        onPress={() => resolve(it, 'rejected')}
+                        className="flex-1 items-center rounded-lg bg-gray-100 py-2.5"
+                        activeOpacity={0.8}>
+                        <Text className="text-sm font-medium text-gray-700">Reject</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <Text className="text-xs text-gray-400 capitalize">{it.status}</Text>
+                  )}
+                </View>
+              );
+            })}
           </View>
         )}
 

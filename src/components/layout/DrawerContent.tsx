@@ -7,6 +7,13 @@ import { Platform, Text, TouchableOpacity, View } from 'react-native';
 const NAV_ITEMS = [
   { href: '/', emoji: '🏠', label: 'Home', desc: 'Dashboard' },
   { href: '/rag-chatbot', emoji: '🤖', label: 'RAG Chatbot', desc: 'Document Q&A' },
+  { href: '/learning', emoji: '🎓', label: 'Learning', desc: 'Roadmaps & AI tutor' },
+  {
+    href: '/learning-tracker',
+    emoji: '📝',
+    label: 'Learning Tracker',
+    desc: 'Plan learnings',
+  },
   { href: '/meal-planner', emoji: '📝', label: 'Meal Planner', desc: 'Plan your weekly diet' },
   { href: '/web-scraper', emoji: '🌐', label: 'Web Scraper', desc: 'URL to summary' },
   { href: '/email-assistant', emoji: '✉️', label: 'Email Assistant', desc: 'Email helper' },
@@ -36,8 +43,10 @@ export default function DrawerContent(props: DrawerContentComponentProps) {
   const { user, logout } = useAuth();
   const [expiry, setExpiry] = useState(() => formatExpiry(user?.expires_at ?? null));
 
-  const isActive = (href: string) =>
-    href === '/' ? pathname === '/' || pathname === '' : pathname === href;
+  const isActive = (href: string) => {
+    if (href === '/') return pathname === '/' || pathname === '';
+    return pathname === href || pathname.startsWith(href + '/');
+  };
 
   const handleNavigate = (href: string) => {
     router.navigate(href);
@@ -75,9 +84,6 @@ export default function DrawerContent(props: DrawerContentComponentProps) {
               <Text className="text-sm font-bold text-white">{getInitials(user)}</Text>
             </View>
             <View className="flex-1 overflow-hidden">
-              <Text className="text-sm font-semibold text-white" numberOfLines={1}>
-                {user.first_name} {user.last_name}
-              </Text>
               <Text className="text-xs text-gray-400" numberOfLines={1}>
                 {user.email}
               </Text>

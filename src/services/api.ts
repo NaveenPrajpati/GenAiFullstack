@@ -1,7 +1,6 @@
-import { Platform } from 'react-native';
-
-export const BASE_URL =
-  Platform.OS == 'web' ? 'http://127.0.0.1:8000/api' : 'http://192.168.0.151:8000/api';
+export const BASE_URL = __DEV__
+  ? 'http://192.168.0.151:8000/api'
+  : 'https://genaiback.onrender.com/api';
 
 export const UserApis = {
   guest: '/user/guest',
@@ -16,11 +15,26 @@ export const RagApis = {
   getallChats: '/chat',
   getallMessages: (id: string) => '/chat/'.concat(id, '/messages'),
 };
+export const LearningTrackerApis = {
+  query: BASE_URL + '/learning/query',
+  approvals: BASE_URL + '/learning/approvals',
+  meals: (planId: string) => BASE_URL + 'learning/meal-slots/'.concat(planId),
+  roadmaps: BASE_URL + '/learning/roadmaps',
+};
+export const LearningApis = {
+  query: BASE_URL + '/learning/query',
+  approvals: BASE_URL + '/learning/approvals',
+  roadmaps: BASE_URL + '/learning/roadmaps',
+  progress: BASE_URL + '/learning/progress',
+  submitQuiz: BASE_URL + '/learning/submit-quiz',
+  memory: BASE_URL + '/learning/memory',
+  toggleTrigger: BASE_URL + '/learning/toggle-trigger',
+  digests: BASE_URL + '/learning/digests',
+};
+
 export const MealPlannerApis = {
   query: BASE_URL + '/meal-planner/query',
-  approval: BASE_URL + '/meal-planner/approve',
-  profile: BASE_URL + '/meal-planner/profile',
+  approval: BASE_URL + '/learning/approve',
+  meals: (planId: string) => BASE_URL + '/meal-planner/meal-slots/'.concat(planId),
   plans: BASE_URL + '/meal-planner/plans',
-  getallChats: '/chat',
-  getallMessages: (id: string) => '/chat/'.concat(id, '/messages'),
 };

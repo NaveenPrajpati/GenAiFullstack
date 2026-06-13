@@ -20,7 +20,7 @@ interface AuthContextType {
   user: User | null;
   isReady: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string) => Promise<void>;
+  signup: (email: string, name: string, password: string) => Promise<void>;
   createGuest: () => Promise<void>;
   convertGuest: (email: string, password: string) => Promise<void>;
   fetchMe: () => Promise<void>;
@@ -77,8 +77,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await saveSession(res.data.token, res.data.user);
   }, []);
 
-  const signup = useCallback(async (email: string, password: string) => {
-    const res = await apiClient().post(UserApis.signup, { email, password });
+  const signup = useCallback(async (name: string, email: string, password: string) => {
+    const res = await apiClient().post(UserApis.signup, { email, password, name });
     await saveSession(res.data.token, res.data.user);
   }, []);
 
