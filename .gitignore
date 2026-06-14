@@ -13,6 +13,8 @@ web-build/
 
 
 .env
+*.apk
+*.ipa
 ios
 android
 

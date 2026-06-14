@@ -1,6 +1,10 @@
+import { apiClient, useAuth } from '@/context/AuthContext';
+import { UserApis } from '@/services/api';
+import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
-
+import { useEffect } from 'react';
+import { Platform, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 const APPS = [
   {
     href: '/rag-chatbot',
@@ -50,8 +54,57 @@ const APPS = [
   },
 ] as const;
 
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 export default function HomeScreen() {
   const router = useRouter();
+  const { token } = useAuth();
+
+  useEffect(() => {
+    if (!token) return;
+    registerForPushNotificationsAsync().then((pushToken) => {
+      if (pushToken) {
+        // Send this token to the FastAPI backend, mapped to the user via the auth header.
+        apiClient(token)
+          .post(UserApis.pushToken, { 'expo-push-token': pushToken })
+          .catch((err) => console.log('registerPushToken', err));
+      }
+    });
+  }, [token]);
+
+  async function registerForPushNotificationsAsync() {
+    let token;
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+      });
+    }
+
+    if (Device.isDevice) {
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      if (finalStatus !== 'granted') {
+        alert('Failed to get push token for push notification!');
+        return;
+      }
+      // Extract the exact stable Expo token string format
+      token = (await Notifications.getExpoPushTokenAsync()).data;
+    } else {
+      alert('Must use physical device for Push Notifications');
+    }
+
+    return token;
+  }
 
   return (
     <View className="flex-1">

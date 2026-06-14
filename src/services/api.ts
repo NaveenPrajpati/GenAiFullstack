@@ -8,6 +8,7 @@ export const UserApis = {
   me: '/user/me',
   signup: '/user/signup',
   login: '/user/login',
+  pushToken: '/user/me/expo-push-token',
 };
 
 export const RagApis = {
