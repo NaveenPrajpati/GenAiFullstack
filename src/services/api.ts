@@ -32,9 +32,5 @@ export const LearningApis = {
   digests: BASE_URL + '/learning/digests',
 };
 
-export const MealPlannerApis = {
-  query: BASE_URL + '/meal-planner/query',
-  approval: BASE_URL + '/learning/approve',
-  meals: (planId: string) => BASE_URL + '/meal-planner/meal-slots/'.concat(planId),
-  plans: BASE_URL + '/meal-planner/plans',
-};
+// Meal Planner endpoints live in the self-contained feature module:
+// src/features/meal-planner/mealPlannerApi.ts
