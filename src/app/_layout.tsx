@@ -19,9 +19,10 @@ function AppDrawer() {
     setMounted(true);
   }, []);
 
+  const inAuth = segments[0] === 'auth';
+
   useEffect(() => {
     if (!mounted || !isReady) return;
-    const inAuth = segments[0] === 'auth';
     if (!token && !inAuth) {
       router.replace('/auth/login');
     } else if (token && inAuth) {
@@ -29,28 +30,32 @@ function AppDrawer() {
     }
   }, [token, segments, mounted, isReady]);
   const isMobile = width <= 500;
+  // Only show the drawer for authenticated users on non-auth screens.
+  const showDrawer = !!token && !inAuth;
   return (
     <Drawer
       drawerContent={(props) => <DrawerContent {...props} />}
       screenOptions={{
-        headerShown: isMobile,
+        headerShown: showDrawer && isMobile,
         headerTitle: 'All apps',
         headerStyle: { backgroundColor: '#ffffff', elevation: 0, shadowOpacity: 0 },
         headerShadowVisible: false,
+
         headerLeft: () => <DrawerToggleButton tintColor="#374151" />,
-        drawerType: isMobile ? 'front' : 'permanent',
+        // When hidden, collapse to a non-permanent, non-swipeable drawer.
+        drawerType: !showDrawer ? 'front' : isMobile ? 'front' : 'permanent',
         drawerStyle: { width: 256, backgroundColor: '#111827' },
-        swipeEnabled: isMobile,
+        swipeEnabled: showDrawer && isMobile,
         overlayColor: 'rgba(0,0,0,0.5)',
       }}>
       <Drawer.Screen name="index" options={{ drawerLabel: 'Home' }} />
       <Drawer.Screen name="rag-chatbot" options={{ headerTitle: 'Rag Chatbot' }} />
       <Drawer.Screen name="meal-planner" options={{ drawerLabel: 'Meal planner' }} />
-      <Drawer.Screen name="learning" options={{ drawerLabel: 'Learning', headerTitle: 'Learning' }} />
-      <Drawer.Screen name="learning-tracker" options={{ drawerLabel: 'Learning Tracker' }} />
+      <Drawer.Screen
+        name="learning"
+        options={{ drawerLabel: 'Learning', headerTitle: 'Learning' }}
+      />
       <Drawer.Screen name="personal-assistant" options={{ drawerLabel: 'Personal Assistant' }} />
-      <Drawer.Screen name="web-scraper" options={{ drawerLabel: 'Web Scraper' }} />
-      <Drawer.Screen name="email-assistant" options={{ drawerLabel: 'Email Assistant' }} />
       <Drawer.Screen name="recipe-generator" options={{ drawerLabel: 'Recipe Generator' }} />
       <Drawer.Screen
         name="auth/login"

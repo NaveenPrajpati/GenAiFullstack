@@ -1,6 +1,6 @@
 export const BASE_URL = __DEV__
   ? 'http://192.168.0.151:8000/api'
-  : 'https://genaiback.onrender.com/api';
+  : 'https://genai-back.vercel.app/api';
 
 export const UserApis = {
   guest: '/user/guest',

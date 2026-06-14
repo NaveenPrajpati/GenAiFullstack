@@ -9,14 +9,13 @@ const NAV_ITEMS = [
   { href: '/rag-chatbot', emoji: '🤖', label: 'RAG Chatbot', desc: 'Document Q&A' },
   { href: '/learning', emoji: '🎓', label: 'Learning', desc: 'Roadmaps & AI tutor' },
   {
-    href: '/learning-tracker',
-    emoji: '📝',
-    label: 'Learning Tracker',
-    desc: 'Plan learnings',
+    href: '/personal-assistant',
+    emoji: '🪄',
+    label: 'Personal Assistant',
+    desc: 'Tasks, agenda & notes',
   },
+
   { href: '/meal-planner', emoji: '📝', label: 'Meal Planner', desc: 'Plan your weekly diet' },
-  { href: '/web-scraper', emoji: '🌐', label: 'Web Scraper', desc: 'URL to summary' },
-  { href: '/email-assistant', emoji: '✉️', label: 'Email Assistant', desc: 'Email helper' },
   { href: '/recipe-generator', emoji: '🍳', label: 'Recipe Generator', desc: 'Cook with AI' },
 ] as const;
 
@@ -117,34 +116,31 @@ export default function DrawerContent(props: DrawerContentComponentProps) {
 
       {/* Nav items */}
       <DrawerContentScrollView
-        {...props}
+        // {...props}
         contentContainerStyle={{ flexGrow: 1 }}
         style={{ backgroundColor: 'transparent' }}>
-        <View className="py-2">
-          {NAV_ITEMS.map((item) => {
-            const active = isActive(item.href);
-            return (
-              <TouchableOpacity
-                key={item.href}
-                onPress={() => handleNavigate(item.href)}
-                className={`mx-2 my-0.5 flex-row items-center gap-3 rounded-lg px-3 py-2.5 ${active ? 'bg-indigo-600' : ''}`}
-                activeOpacity={0.7}>
-                <View
-                  className={`h-8 w-8 items-center justify-center rounded-lg ${active ? 'bg-indigo-500' : 'bg-gray-800'}`}>
-                  <Text className="text-base">{item.emoji}</Text>
-                </View>
-                <View className="flex-1">
-                  <Text
-                    className={`text-sm font-medium ${active ? 'text-white' : 'text-gray-300'}`}>
-                    {item.label}
-                  </Text>
-                  <Text className="text-xs text-gray-500">{item.desc}</Text>
-                </View>
-                {active && <View className="h-1.5 w-1.5 rounded-full bg-indigo-400" />}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        {NAV_ITEMS.map((item) => {
+          const active = isActive(item.href);
+          return (
+            <TouchableOpacity
+              key={item.href}
+              onPress={() => handleNavigate(item.href)}
+              className={`my-0.5 flex-row items-center gap-3 rounded-lg px-3 py-2.5 ${active ? 'bg-indigo-600' : ''}`}
+              activeOpacity={0.7}>
+              <View
+                className={`h-8 w-8 items-center justify-center rounded-lg ${active ? 'bg-indigo-500' : 'bg-gray-800'}`}>
+                <Text className="text-base">{item.emoji}</Text>
+              </View>
+              <View className="flex-1">
+                <Text className={`text-sm font-medium ${active ? 'text-white' : 'text-gray-300'}`}>
+                  {item.label}
+                </Text>
+                <Text className="text-xs text-gray-500">{item.desc}</Text>
+              </View>
+              {active && <View className="h-1.5 w-1.5 rounded-full bg-indigo-400" />}
+            </TouchableOpacity>
+          );
+        })}
       </DrawerContentScrollView>
 
       {/* Logout */}
