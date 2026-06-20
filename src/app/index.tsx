@@ -1,5 +1,6 @@
 import { apiClient, useAuth } from '@/context/AuthContext';
 import { UserApis } from '@/services/api';
+import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
@@ -43,15 +44,6 @@ const APPS = [
     btnBg: 'bg-sky-600',
     bar: 'bg-sky-500',
   },
-  {
-    href: '/recipe-generator',
-    emoji: '🍳',
-    title: 'Recipe Generator',
-    desc: 'Pick your ingredients, cuisine, and dietary preference to get personalized recipe ideas.',
-    iconBg: 'bg-amber-100',
-    btnBg: 'bg-amber-500',
-    bar: 'bg-amber-500',
-  },
 ] as const;
 
 Notifications.setNotificationHandler({
@@ -67,14 +59,16 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (!token) return;
-    registerForPushNotificationsAsync().then((pushToken) => {
-      if (pushToken) {
-        // Send this token to the FastAPI backend, mapped to the user via the auth header.
-        apiClient(token)
-          .post(UserApis.pushToken, { 'expo-push-token': pushToken })
-          .catch((err) => console.log('registerPushToken', err));
-      }
-    });
+    registerForPushNotificationsAsync()
+      .then((pushToken) => {
+        if (pushToken) {
+          // Send this token to the FastAPI backend, mapped to the user via the auth header.
+          apiClient(token)
+            .patch(UserApis.pushToken, { expo_push_token: pushToken })
+            .catch((err) => console.log('registerPushToken', err));
+        }
+      })
+      .catch((err) => console.log('registerForPushNotificationsAsync', err));
   }, [token]);
 
   async function registerForPushNotificationsAsync() {
@@ -97,8 +91,16 @@ export default function HomeScreen() {
         alert('Failed to get push token for push notification!');
         return;
       }
+      // projectId is auto-resolved in dev, but MUST be passed explicitly in
+      // standalone/preview builds or getExpoPushTokenAsync() throws.
+      const projectId =
+        Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+      if (!projectId) {
+        console.log('registerForPushNotificationsAsync', 'Missing EAS projectId');
+        return;
+      }
       // Extract the exact stable Expo token string format
-      token = (await Notifications.getExpoPushTokenAsync()).data;
+      token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
     } else {
       alert('Must use physical device for Push Notifications');
     }

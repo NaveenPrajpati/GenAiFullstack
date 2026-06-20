@@ -1,8 +1,9 @@
 import { useAuth } from '@/context/AuthContext';
 import { DrawerContentComponentProps, DrawerContentScrollView } from '@react-navigation/drawer';
 import { usePathname, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Platform, Text, TouchableOpacity, View } from 'react-native';
+import * as Updates from 'expo-updates';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Platform, Text, TouchableOpacity, View } from 'react-native';
 
 const NAV_ITEMS = [
   { href: '/', emoji: '🏠', label: 'Home', desc: 'Dashboard' },
@@ -16,7 +17,6 @@ const NAV_ITEMS = [
   },
 
   { href: '/meal-planner', emoji: '📝', label: 'Meal Planner', desc: 'Plan your weekly diet' },
-  { href: '/recipe-generator', emoji: '🍳', label: 'Recipe Generator', desc: 'Cook with AI' },
 ] as const;
 
 function formatExpiry(expiresAt: string | null): string {
@@ -41,6 +41,38 @@ export default function DrawerContent(props: DrawerContentComponentProps) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const [expiry, setExpiry] = useState(() => formatExpiry(user?.expires_at ?? null));
+
+  // OTA update state: idle → available → updating
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'available' | 'updating'>('idle');
+
+  // Check for an OTA update on mount (no-op in dev / Expo Go)
+  useEffect(() => {
+    if (!Updates.isEnabled || __DEV__) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await Updates.checkForUpdateAsync();
+        if (!cancelled && result.isAvailable) setUpdateStatus('available');
+      } catch {
+        // Offline or no update channel — ignore silently
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleApplyUpdate = useCallback(async () => {
+    if (updateStatus === 'updating') return;
+    setUpdateStatus('updating');
+    try {
+      await Updates.fetchUpdateAsync();
+      await Updates.reloadAsync();
+    } catch {
+      // Download/reload failed — let the user retry
+      setUpdateStatus('available');
+    }
+  }, [updateStatus]);
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/' || pathname === '';
@@ -142,6 +174,35 @@ export default function DrawerContent(props: DrawerContentComponentProps) {
           );
         })}
       </DrawerContentScrollView>
+
+      {/* OTA update banner */}
+      {updateStatus !== 'idle' && (
+        <View className="border-t border-gray-700 px-4 pt-3">
+          <TouchableOpacity
+            onPress={handleApplyUpdate}
+            disabled={updateStatus === 'updating'}
+            className="flex-row items-center gap-3 rounded-xl bg-emerald-600/20 px-3 py-2.5"
+            activeOpacity={0.8}>
+            <View className="h-8 w-8 items-center justify-center rounded-lg bg-emerald-600">
+              {updateStatus === 'updating' ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text className="text-base">⬇️</Text>
+              )}
+            </View>
+            <View className="flex-1">
+              <Text className="text-sm font-semibold text-emerald-300">
+                {updateStatus === 'updating' ? 'Updating…' : 'Update available'}
+              </Text>
+              <Text className="text-xs text-emerald-400/70">
+                {updateStatus === 'updating'
+                  ? 'Downloading & restarting'
+                  : 'Tap to update to the latest version'}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Logout */}
       <View className="border-t border-gray-700 p-4">
