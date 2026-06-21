@@ -1,9 +1,9 @@
 import { useAuth } from '@/context/AuthContext';
-import { Roadmap, useLearningStore } from '@/store/learningStore';
-import Spinner from '@/components/ui/Spinner';
+import { useLearningStore } from '@/features/learning/store';
+import type { Roadmap } from '@/features/learning/types';
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 function getProgress(roadmap: Roadmap) {
   const total = roadmap.topics.length;
@@ -47,7 +47,7 @@ export default function RoadmapsScreen() {
       <ScrollView className="flex-1 p-4" contentContainerStyle={{ paddingBottom: 24 }}>
         {roadmapsLoading && (
           <View className="items-center py-12">
-            <Spinner size="large" />
+            <ActivityIndicator size="large" />
             <Text className="mt-3 text-sm text-gray-400">Loading roadmaps…</Text>
           </View>
         )}

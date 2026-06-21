@@ -1,9 +1,8 @@
 import { useAuth } from '@/context/AuthContext';
-import { useLearningStore } from '@/store/learningStore';
-import Spinner from '@/components/ui/Spinner';
+import { useLearningStore } from '@/features/learning/store';
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
-import { Linking, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Linking, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 export default function DigestsScreen() {
   const { token } = useAuth();
@@ -28,7 +27,7 @@ export default function DigestsScreen() {
       <ScrollView className="flex-1 p-4" contentContainerStyle={{ paddingBottom: 32 }}>
         {digestsLoading && (
           <View className="items-center py-12">
-            <Spinner size="large" />
+            <ActivityIndicator size="large" />
             <Text className="mt-3 text-sm text-gray-400">Loading digests…</Text>
           </View>
         )}
@@ -56,9 +55,7 @@ export default function DigestsScreen() {
             year: 'numeric',
           });
           return (
-            <View
-              key={digest._id}
-              className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
+            <View key={digest._id} className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
               <View className="mb-2 flex-row items-start justify-between">
                 <Text className="flex-1 pr-2 text-base font-semibold text-gray-900">
                   {digest.topicTitle}

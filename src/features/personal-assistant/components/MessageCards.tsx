@@ -1,6 +1,5 @@
 /** Rich cards rendered inside assistant chat bubbles. */
-import { Linking, Text, TouchableOpacity, View } from 'react-native';
-import Spinner from '@/components/ui/Spinner';
+import { ActivityIndicator, Linking, Text, TouchableOpacity, View } from 'react-native';
 import type { AgendaBuckets, DeleteProposal, Note, ResearchResult, Task } from '../types';
 import { formatDue, PriorityChip, RecurrenceBadge } from './common';
 
@@ -184,7 +183,7 @@ export function ApprovalCard({
             className="flex-1 items-center rounded-lg bg-red-600 py-2.5"
             activeOpacity={0.8}>
             {busy ? (
-              <Spinner size="small" color="white" />
+              <ActivityIndicator size="small" color="white" />
             ) : (
               <Text className="text-sm font-semibold text-white">Delete</Text>
             )}

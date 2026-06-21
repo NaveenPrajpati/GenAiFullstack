@@ -29,8 +29,7 @@ function AppDrawer() {
       router.replace('/');
     }
   }, [token, segments, mounted, isReady]);
-  const isMobile = width <= 500;
-  // Only show the drawer for authenticated users on non-auth screens.
+  const isMobile = width <= 800;
   const showDrawer = !!token && !inAuth;
   return (
     <Drawer
@@ -56,7 +55,6 @@ function AppDrawer() {
         options={{ drawerLabel: 'Learning', headerTitle: 'Learning' }}
       />
       <Drawer.Screen name="personal-assistant" options={{ drawerLabel: 'Personal Assistant' }} />
-      <Drawer.Screen name="recipe-generator" options={{ drawerLabel: 'Recipe Generator' }} />
       <Drawer.Screen
         name="auth/login"
         options={{ drawerItemStyle: { display: 'none' }, headerShown: false, swipeEnabled: false }}

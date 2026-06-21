@@ -1,9 +1,10 @@
 import { useAuth } from '@/context/AuthContext';
-import { Memory, useLearningStore } from '@/store/learningStore';
-import Spinner from '@/components/ui/Spinner';
+import { useLearningStore } from '@/features/learning/store';
+import type { Memory } from '@/features/learning/types';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   ScrollView,
   Switch,
@@ -14,7 +15,11 @@ import {
 } from 'react-native';
 
 const arrToStr = (a?: string[]) => (a ?? []).join(', ');
-const strToArr = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
+const strToArr = (s: string) =>
+  s
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
 
 type FormState = {
   skill_level: string;
@@ -89,35 +94,31 @@ export default function SettingsScreen() {
   };
 
   const handleClearMemory = () => {
-    Alert.alert(
-      'Clear Memory',
-      'Clear all learning profile data? This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: async () => {
-            if (!token) return;
-            setClearing(true);
-            try {
-              await deleteMemory(token);
-              setForm({
-                skill_level: '',
-                preferred_resource_types: '',
-                goals: '',
-                availability: '',
-                known_topics: '',
-              });
-            } catch (e: any) {
-              setError(e?.response?.data?.detail ?? 'Failed to clear memory.');
-            } finally {
-              setClearing(false);
-            }
-          },
+    Alert.alert('Clear Memory', 'Clear all learning profile data? This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear',
+        style: 'destructive',
+        onPress: async () => {
+          if (!token) return;
+          setClearing(true);
+          try {
+            await deleteMemory(token);
+            setForm({
+              skill_level: '',
+              preferred_resource_types: '',
+              goals: '',
+              availability: '',
+              known_topics: '',
+            });
+          } catch (e: any) {
+            setError(e?.response?.data?.detail ?? 'Failed to clear memory.');
+          } finally {
+            setClearing(false);
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const handleToggleDigest = async () => {
@@ -155,7 +156,7 @@ export default function SettingsScreen() {
               </Text>
             </View>
             {toggling ? (
-              <Spinner size="small" />
+              <ActivityIndicator size="small" />
             ) : (
               <Switch
                 value={digestEnabled}
@@ -173,7 +174,7 @@ export default function SettingsScreen() {
 
           {memoryLoading ? (
             <View className="items-center py-6">
-              <Spinner />
+              <ActivityIndicator />
             </View>
           ) : (
             <>
@@ -189,12 +190,8 @@ export default function SettingsScreen() {
               </View>
 
               <View className="mb-4">
-                <Text className="mb-0.5 text-xs font-semibold text-gray-500">
-                  Available Time
-                </Text>
-                <Text className="mb-1 text-xs text-gray-400">
-                  How much time you can dedicate
-                </Text>
+                <Text className="mb-0.5 text-xs font-semibold text-gray-500">Available Time</Text>
+                <Text className="mb-1 text-xs text-gray-400">How much time you can dedicate</Text>
                 <TextInput
                   className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800"
                   placeholder="e.g. 2 hours/day, weekends only"
@@ -263,7 +260,7 @@ export default function SettingsScreen() {
             activeOpacity={0.8}>
             {saving ? (
               <View className="flex-row items-center gap-2">
-                <Spinner size="small" color="white" />
+                <ActivityIndicator size="small" color="white" />
                 <Text className="text-sm font-semibold text-white">Saving…</Text>
               </View>
             ) : (
@@ -289,7 +286,7 @@ export default function SettingsScreen() {
             activeOpacity={0.8}>
             {clearing ? (
               <View className="flex-row items-center gap-2">
-                <Spinner size="small" />
+                <ActivityIndicator size="small" />
                 <Text className="text-sm text-gray-500">Clearing…</Text>
               </View>
             ) : (

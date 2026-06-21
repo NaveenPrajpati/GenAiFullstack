@@ -1,9 +1,8 @@
-import Spinner from '@/components/ui/Spinner';
 import { usePersonalAssistantStore } from '@/features/personal-assistant/store';
 import type { PendingApproval } from '@/features/personal-assistant/types';
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
-import { ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native';
 
 function approvalTitle(a: PendingApproval): string {
   if (a.title) return a.title;
@@ -47,7 +46,7 @@ export default function PASettingsScreen() {
               </Text>
             </View>
             {digestToggling ? (
-              <Spinner size="small" />
+              <ActivityIndicator size="small" />
             ) : (
               <Switch
                 value={digestEnabled}
@@ -71,7 +70,7 @@ export default function PASettingsScreen() {
 
           {approvalsLoading && approvals.length === 0 && (
             <View className="items-center py-6">
-              <Spinner />
+              <ActivityIndicator />
             </View>
           )}
 

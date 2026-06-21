@@ -1,19 +1,19 @@
+import axios from 'axios';
+import * as DocumentPicker from 'expo-document-picker';
+import { DocumentPickerAsset } from 'expo-document-picker';
+import { useEffect, useRef, useState } from 'react';
 import {
-  View,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
   useWindowDimensions,
+  View,
 } from 'react-native';
-import { useEffect, useState, useRef } from 'react';
-import { DocumentPickerAsset } from 'expo-document-picker';
 import { BASE_URL, RagApis } from '../services/api';
-import Spinner from '../components/ui/Spinner';
-import * as DocumentPicker from 'expo-document-picker';
-import axios from 'axios';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -221,7 +221,7 @@ export default function RagChatbotScreen() {
             isUploading ? 'opacity-50' : ''
           }`}
           activeOpacity={0.8}>
-          {isUploading && <Spinner size="small" color="#fff" />}
+          {isUploading && <ActivityIndicator size="small" color="#fff" />}
           <Text className="text-sm font-semibold text-white">
             {isUploading ? 'Uploading...' : '📎 Upload PDF / Text'}
           </Text>
@@ -392,7 +392,7 @@ export default function RagChatbotScreen() {
         {loading && (
           <View style={{ alignSelf: 'flex-start' }} className="mb-3">
             <View className="flex-row items-center gap-2 rounded-2xl rounded-bl-sm border border-gray-200 bg-white px-4 py-3">
-              <Spinner size="small" color="#3b82f6" />
+              <ActivityIndicator size="small" color="#3b82f6" />
               <Text className="text-sm text-gray-500">Thinking...</Text>
             </View>
           </View>

@@ -1,4 +1,3 @@
-import Spinner from '@/components/ui/Spinner';
 import {
   ConflictCard,
   ProposalCard,
@@ -10,6 +9,7 @@ import type { ChatMessage } from '@/features/meal-planner/types';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -245,7 +245,7 @@ export default function MealPlannerChatScreen() {
           {chatLoading && !pendingApproval && !pendingConflict && (
             <View className="mb-3 items-start">
               <View className="rounded-2xl rounded-tl-sm bg-gray-100 px-4 py-3">
-                <Spinner size="small" />
+                <ActivityIndicator size="small" />
               </View>
             </View>
           )}
@@ -275,7 +275,7 @@ export default function MealPlannerChatScreen() {
               }`}
               activeOpacity={0.8}>
               {chatLoading ? (
-                <Spinner size="small" color="white" />
+                <ActivityIndicator size="small" color="white" />
               ) : (
                 <Text className="text-lg font-bold text-white">↑</Text>
               )}

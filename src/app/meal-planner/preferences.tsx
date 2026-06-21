@@ -1,11 +1,18 @@
-import Spinner from '@/components/ui/Spinner';
 import { ErrorCard } from '@/features/meal-planner/components/common';
 import { formatWeekStart } from '@/features/meal-planner/copy';
 import { useMealPlannerStore } from '@/features/meal-planner/store';
 import type { PendingApproval } from '@/features/meal-planner/types';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  ScrollView,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 function approvalTitle(a: PendingApproval): string {
   if (a.week_start) return `Plan for ${formatWeekStart(a.week_start)}`;
@@ -102,7 +109,7 @@ export default function PreferencesScreen() {
           {!!error && <Text className="mb-2 text-sm text-red-700">{error}</Text>}
 
           {dislikedLoading && dislikedDishes.length === 0 ? (
-            <Spinner size="small" />
+            <ActivityIndicator size="small" />
           ) : !!dislikedError && dislikedDishes.length === 0 ? (
             <ErrorCard message={dislikedError} onRetry={loadDisliked} />
           ) : dislikedDishes.length === 0 ? (
@@ -135,7 +142,7 @@ export default function PreferencesScreen() {
               </Text>
             </View>
             {autoPlanToggling ? (
-              <Spinner size="small" />
+              <ActivityIndicator size="small" />
             ) : (
               <Switch
                 value={autoPlanEnabled}
@@ -159,7 +166,7 @@ export default function PreferencesScreen() {
 
           {approvalsLoading && approvals.length === 0 && (
             <View className="items-center py-6">
-              <Spinner />
+              <ActivityIndicator />
             </View>
           )}
 

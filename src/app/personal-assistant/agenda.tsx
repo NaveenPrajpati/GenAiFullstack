@@ -1,4 +1,3 @@
-import Spinner from '@/components/ui/Spinner';
 import {
   PriorityChip,
   RecurrenceBadge,
@@ -8,7 +7,7 @@ import { usePersonalAssistantStore } from '@/features/personal-assistant/store';
 import type { AgendaBuckets, Task } from '@/features/personal-assistant/types';
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 const SECTIONS: {
   key: keyof AgendaBuckets;
@@ -76,7 +75,7 @@ export default function AgendaScreen() {
       <ScrollView className="flex-1 p-4" contentContainerStyle={{ paddingBottom: 24 }}>
         {agendaLoading && !agenda && (
           <View className="items-center py-12">
-            <Spinner size="large" />
+            <ActivityIndicator size="large" />
             <Text className="mt-3 text-sm text-gray-400">Loading agenda…</Text>
           </View>
         )}

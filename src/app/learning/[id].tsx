@@ -1,9 +1,9 @@
 import { useAuth } from '@/context/AuthContext';
-import { Roadmap, TopicNode, useLearningStore } from '@/store/learningStore';
-import Spinner from '@/components/ui/Spinner';
+import { useLearningStore } from '@/features/learning/store';
+import type { Roadmap, TopicNode } from '@/features/learning/types';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 function groupByStages(roadmap: Roadmap) {
   const sorted = [...roadmap.topics].sort((a, b) => a.order - b.order);
@@ -34,7 +34,7 @@ export default function RoadmapDetail() {
   if (roadmapsLoading && !roadmap) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
-        <Spinner size="large" />
+        <ActivityIndicator size="large" />
       </View>
     );
   }
@@ -111,7 +111,7 @@ export default function RoadmapDetail() {
 
         {groups.map(({ stage, topics }) => (
           <View key={stage} className="mb-5">
-            <Text className="mb-2 text-xs font-bold uppercase tracking-widest text-gray-400">
+            <Text className="mb-2 text-xs font-bold tracking-widest text-gray-400 uppercase">
               {stage}
             </Text>
 
@@ -131,9 +131,7 @@ export default function RoadmapDetail() {
                       className={`mt-0.5 h-5 w-5 items-center justify-center rounded-full border-2 ${
                         topic.covered ? 'border-green-500 bg-green-500' : 'border-gray-300'
                       }`}>
-                      {topic.covered && (
-                        <Text className="text-xs font-bold text-white">✓</Text>
-                      )}
+                      {topic.covered && <Text className="text-xs font-bold text-white">✓</Text>}
                     </TouchableOpacity>
 
                     {/* Title */}
@@ -148,9 +146,7 @@ export default function RoadmapDetail() {
                           }`}>
                           {topic.order}. {topic.title}
                         </Text>
-                        <Text className="ml-2 text-xs text-gray-400">
-                          {isExpanded ? '▲' : '▼'}
-                        </Text>
+                        <Text className="ml-2 text-xs text-gray-400">{isExpanded ? '▲' : '▼'}</Text>
                       </View>
                       {topic.estimated_hours ? (
                         <Text className="mt-0.5 text-xs text-gray-400">
@@ -229,9 +225,7 @@ export default function RoadmapDetail() {
         ))}
 
         <TouchableOpacity
-          onPress={() =>
-            openChat(`What should I study next in the "${roadmap.title}" roadmap?`)
-          }
+          onPress={() => openChat(`What should I study next in the "${roadmap.title}" roadmap?`)}
           className="items-center rounded-xl bg-violet-600 py-4"
           activeOpacity={0.8}>
           <Text className="text-sm font-semibold text-white">Ask AI about this roadmap</Text>

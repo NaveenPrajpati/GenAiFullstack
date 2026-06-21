@@ -46,6 +46,20 @@ const APPS = [
   },
 ] as const;
 
+import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
+
+const MyComponent = () => {
+  const content = `# Hello World\nThis is **bold** text and a [Link](https://google.com).`;
+
+  return (
+    <EnrichedMarkdownText
+      markdown={content}
+      flavor="github"
+      onLinkPress={(url) => console.log('Opening:', url)}
+    />
+  );
+};
+
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -112,15 +126,17 @@ export default function HomeScreen() {
     <View className="flex-1">
       <ScrollView className="flex-1 bg-gray-50">
         <View className="border-b border-gray-200 bg-white px-6 py-8">
-          <View className="mb-4 h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600">
+          {/* <View className="mb-4 h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600">
             <Text className="text-2xl text-white">🤖</Text>
-          </View>
+          </View> */}
           <Text className="mb-2 text-3xl font-bold text-gray-900">AI Toolkit</Text>
           <Text className="text-base leading-relaxed text-gray-600">
             A collection of AI-powered tools to boost your productivity. Select an app to get
             started.
           </Text>
         </View>
+
+        <MyComponent />
 
         <View className="gap-4 p-4">
           {APPS.map((app) => (

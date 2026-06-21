@@ -1,9 +1,15 @@
-import Spinner from '@/components/ui/Spinner';
 import { usePersonalAssistantStore } from '@/features/personal-assistant/store';
 import type { Note } from '@/features/personal-assistant/types';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 const UNCATEGORIZED = 'General';
 
@@ -89,7 +95,7 @@ export default function NotesScreen() {
             activeOpacity={0.8}
             accessibilityRole="button">
             {adding ? (
-              <Spinner size="small" color="white" />
+              <ActivityIndicator size="small" color="white" />
             ) : (
               <Text className="text-sm font-semibold text-white">Add note</Text>
             )}
@@ -98,7 +104,7 @@ export default function NotesScreen() {
 
         {notesLoading && notes.length === 0 && (
           <View className="items-center py-10">
-            <Spinner size="large" />
+            <ActivityIndicator size="large" />
           </View>
         )}
 

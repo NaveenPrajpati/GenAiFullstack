@@ -1,9 +1,8 @@
 import { useAuth } from '@/context/AuthContext';
-import { useLearningStore } from '@/store/learningStore';
-import Spinner from '@/components/ui/Spinner';
+import { useLearningStore } from '@/features/learning/store';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 export default function QuizScreen() {
   const router = useRouter();
@@ -101,15 +100,12 @@ export default function QuizScreen() {
                 {quizResult.review.map((r, i) => (
                   <View key={i} className="mb-2 rounded-lg border border-red-100 bg-white p-3">
                     <Text className="mb-1 text-xs font-medium text-gray-700">
-                      Q{r.question + 1}:{' '}
-                      {questions[r.question]?.question}
+                      Q{r.question + 1}: {questions[r.question]?.question}
                     </Text>
                     <Text className="text-xs text-red-500">
                       Your answer: {questions[r.question]?.options[r.selected]}
                     </Text>
-                    <Text className="text-xs text-green-600">
-                      Correct: {r.correctOption}
-                    </Text>
+                    <Text className="text-xs text-green-600">Correct: {r.correctOption}</Text>
                   </View>
                 ))}
               </View>
@@ -174,7 +170,7 @@ export default function QuizScreen() {
             activeOpacity={0.8}>
             {submitting ? (
               <View className="flex-row items-center gap-2">
-                <Spinner size="small" color="white" />
+                <ActivityIndicator size="small" color="white" />
                 <Text className="text-sm font-semibold text-white">Submitting…</Text>
               </View>
             ) : (

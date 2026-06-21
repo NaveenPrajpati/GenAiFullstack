@@ -1,10 +1,18 @@
-import Spinner from '@/components/ui/Spinner';
 import { PriorityChip, formatDue } from '@/features/personal-assistant/components/common';
 import { priorities, usePersonalAssistantStore } from '@/features/personal-assistant/store';
 import type { Priority, Task } from '@/features/personal-assistant/types';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 export default function TaskDetailScreen() {
   const router = useRouter();
@@ -112,7 +120,7 @@ export default function TaskDetailScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          <Spinner size="large" />
+          <ActivityIndicator size="large" />
         )}
       </View>
     );
@@ -212,7 +220,7 @@ export default function TaskDetailScreen() {
               className={`mt-3 items-center rounded-xl py-3 ${saving ? 'bg-gray-300' : 'bg-violet-600'}`}
               activeOpacity={0.8}>
               {saving ? (
-                <Spinner size="small" color="white" />
+                <ActivityIndicator size="small" color="white" />
               ) : (
                 <Text className="text-sm font-semibold text-white">Save changes</Text>
               )}

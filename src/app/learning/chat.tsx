@@ -1,14 +1,11 @@
 import { useAuth } from '@/context/AuthContext';
-import {
-  ChatMessage,
-  Proposal,
-  RoadmapProgress,
-  useLearningStore,
-} from '@/store/learningStore';
-import Spinner from '@/components/ui/Spinner';
+import { ChatMarkdown } from '@/features/learning/components/Markdown';
+import { useLearningStore } from '@/features/learning/store';
+import type { ChatMessage, Proposal, RoadmapProgress } from '@/features/learning/types';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -25,7 +22,7 @@ function ExplainCard({ text }: { text: string }) {
   return (
     <View className="rounded-xl border border-violet-200 bg-violet-50 p-4">
       <Text className="mb-1.5 text-xs font-semibold text-violet-600">Explanation</Text>
-      <Text className="text-sm leading-relaxed text-gray-800">{text}</Text>
+      <ChatMarkdown markdown={text} />
     </View>
   );
 }
@@ -45,13 +42,7 @@ function ResourcesCard({ suggestions }: { suggestions: string[] }) {
   );
 }
 
-function ProgressCard({
-  next_topic,
-  progress,
-}: {
-  next_topic: string;
-  progress: RoadmapProgress;
-}) {
+function ProgressCard({ next_topic, progress }: { next_topic: string; progress: RoadmapProgress }) {
   return (
     <View className="rounded-xl border border-green-100 bg-green-50 p-4">
       <Text className="mb-1 text-xs font-semibold text-green-600">Your progress</Text>
@@ -121,9 +112,7 @@ function ProposalCard({
 
       {(p?.topics ?? []).length > 0 && (
         <View className="mb-4 rounded-lg bg-white p-3">
-          <Text className="mb-2 text-xs font-semibold text-gray-500">
-            {p.topics.length} topics
-          </Text>
+          <Text className="mb-2 text-xs font-semibold text-gray-500">{p.topics.length} topics</Text>
           {p.topics.slice(0, 5).map((t, i) => (
             <Text key={i} className="mb-1 text-xs text-gray-700">
               {t.order}. {t.title}
@@ -143,7 +132,7 @@ function ProposalCard({
           className="flex-1 items-center rounded-lg bg-green-600 py-2.5"
           activeOpacity={0.8}>
           {approving ? (
-            <Spinner size="small" color="white" />
+            <ActivityIndicator size="small" color="white" />
           ) : (
             <Text className="text-sm font-semibold text-white">Approve & Save</Text>
           )}
@@ -189,7 +178,7 @@ function Bubble({
     return (
       <View className="mb-3 items-start">
         <View className="max-w-xs rounded-2xl rounded-tl-sm bg-gray-100 px-4 py-2.5">
-          <Text className="text-sm text-gray-800">{msg.content}</Text>
+          <ChatMarkdown markdown={msg.content} streaming={msg.streaming} />
         </View>
       </View>
     );
@@ -198,7 +187,7 @@ function Bubble({
   if ('intent' in d) {
     if (d.intent === 'explain')
       return (
-        <View className="mb-3 w-72 items-start">
+        <View className="mb-3 w-9/12 items-start">
           <ExplainCard text={d.topic_explaination} />
         </View>
       );
@@ -247,7 +236,7 @@ function Bubble({
   return (
     <View className="mb-3 items-start">
       <View className="max-w-xs rounded-2xl rounded-tl-sm bg-gray-100 px-4 py-2.5">
-        <Text className="text-sm text-gray-800">{msg.content}</Text>
+        <ChatMarkdown markdown={msg.content} />
       </View>
     </View>
   );
@@ -267,13 +256,8 @@ export default function ChatScreen() {
   const [approving, setApproving] = useState(false);
   const [approvalError, setApprovalError] = useState('');
 
-  const {
-    chatMessages,
-    chatLoading,
-    sendChatMessage,
-    resolveProposal,
-    resetChat,
-  } = useLearningStore();
+  const { chatMessages, chatLoading, sendChatMessage, resolveProposal, resetChat } =
+    useLearningStore();
 
   useEffect(() => {
     scrollRef.current?.scrollToEnd({ animated: false });
@@ -321,9 +305,7 @@ export default function ChatScreen() {
             </TouchableOpacity>
             <View>
               <Text className="text-base font-bold text-gray-900">AI Tutor</Text>
-              {!!roadmapId && (
-                <Text className="text-xs text-gray-400">Roadmap context active</Text>
-              )}
+              {!!roadmapId && <Text className="text-xs text-gray-400">Roadmap context active</Text>}
             </View>
           </View>
           <TouchableOpacity
@@ -348,7 +330,7 @@ export default function ChatScreen() {
               <Text className="mb-2 text-5xl">🤖</Text>
               <Text className="mb-1 text-base font-semibold text-gray-700">AI Learning Tutor</Text>
               <Text className="text-center text-sm leading-relaxed text-gray-400">
-                {"Ask me to create a roadmap, explain a topic,\nquiz you, or find resources."}
+                {'Ask me to create a roadmap, explain a topic,\nquiz you, or find resources.'}
               </Text>
             </View>
           )}
@@ -367,7 +349,7 @@ export default function ChatScreen() {
           {chatLoading && (
             <View className="mb-3 items-start">
               <View className="rounded-2xl rounded-tl-sm bg-gray-100 px-4 py-2.5">
-                <Spinner size="small" />
+                <ActivityIndicator size="small" />
               </View>
             </View>
           )}
@@ -399,7 +381,7 @@ export default function ChatScreen() {
               }`}
               activeOpacity={0.8}>
               {chatLoading ? (
-                <Spinner size="small" color="white" />
+                <ActivityIndicator size="small" color="white" />
               ) : (
                 <Text className="text-lg font-bold text-white">↑</Text>
               )}

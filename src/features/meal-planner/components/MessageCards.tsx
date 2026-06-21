@@ -1,6 +1,5 @@
 /** Rich cards rendered inside Meal Planner assistant chat bubbles. */
-import Spinner from '@/components/ui/Spinner';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
 import { dayName, formatWeekStart, MEAL_EMOJI } from '../copy';
 import type { DietConflict, MealSlot, PlanProposal, ResearchMeal } from '../types';
 import PlanGrid from './PlanGrid';
@@ -45,7 +44,7 @@ export function ProposalCard({
             className="flex-1 items-center rounded-lg bg-violet-600 py-2.5"
             activeOpacity={0.8}>
             {busy ? (
-              <Spinner size="small" color="white" />
+              <ActivityIndicator size="small" color="white" />
             ) : (
               <Text className="text-sm font-semibold text-white">Approve</Text>
             )}
@@ -116,7 +115,7 @@ export function ConflictCard({
             }`}
             activeOpacity={0.8}>
             {busy ? (
-              <Spinner size="small" color="white" />
+              <ActivityIndicator size="small" color="white" />
             ) : (
               <Text className="text-sm font-semibold text-white">Accept</Text>
             )}

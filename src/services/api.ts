@@ -16,22 +16,5 @@ export const RagApis = {
   getallChats: '/chat',
   getallMessages: (id: string) => '/chat/'.concat(id, '/messages'),
 };
-export const LearningTrackerApis = {
-  query: BASE_URL + '/learning/query',
-  approvals: BASE_URL + '/learning/approvals',
-  meals: (planId: string) => BASE_URL + 'learning/meal-slots/'.concat(planId),
-  roadmaps: BASE_URL + '/learning/roadmaps',
-};
-export const LearningApis = {
-  query: BASE_URL + '/learning/query',
-  approvals: BASE_URL + '/learning/approvals',
-  roadmaps: BASE_URL + '/learning/roadmaps',
-  progress: BASE_URL + '/learning/progress',
-  submitQuiz: BASE_URL + '/learning/submit-quiz',
-  memory: BASE_URL + '/learning/memory',
-  toggleTrigger: BASE_URL + '/learning/toggle-trigger',
-  digests: BASE_URL + '/learning/digests',
-};
-
-// Meal Planner endpoints live in the self-contained feature module:
-// src/features/meal-planner/mealPlannerApi.ts
+// Learning Tracker endpoints live in the feature module: see
+// `@/features/learning/learningApi`.

@@ -1,4 +1,3 @@
-import Spinner from '@/components/ui/Spinner';
 import {
   AgendaCard,
   ApprovalCard,
@@ -12,6 +11,7 @@ import type { ChatMessage } from '@/features/personal-assistant/types';
 import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -219,7 +219,7 @@ export default function AssistantChatScreen() {
           {chatLoading && !pendingApproval && (
             <View className="mb-3 items-start">
               <View className="rounded-2xl rounded-tl-sm bg-gray-100 px-4 py-3">
-                <Spinner size="small" />
+                <ActivityIndicator size="small" />
               </View>
             </View>
           )}
@@ -249,7 +249,7 @@ export default function AssistantChatScreen() {
               }`}
               activeOpacity={0.8}>
               {chatLoading ? (
-                <Spinner size="small" color="white" />
+                <ActivityIndicator size="small" color="white" />
               ) : (
                 <Text className="text-lg font-bold text-white">↑</Text>
               )}
