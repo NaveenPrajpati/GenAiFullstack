@@ -72,7 +72,7 @@ export default function HomeScreen() {
   const { token } = useAuth();
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || Platform.OS === 'web') return;
     registerForPushNotificationsAsync()
       .then((pushToken) => {
         if (pushToken) {

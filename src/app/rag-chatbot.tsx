@@ -1,6 +1,7 @@
 import axios from 'axios';
 import * as DocumentPicker from 'expo-document-picker';
 import { DocumentPickerAsset } from 'expo-document-picker';
+import { TrashIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -13,8 +14,8 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 import { BASE_URL, RagApis } from '../services/api';
-
 interface Message {
   role: 'user' | 'assistant';
   content: string;
@@ -34,11 +35,10 @@ export default function RagChatbotScreen() {
   const [selectedChat, setSelectedChat] = useState<any>(null);
   const [allChats, setAllChats] = useState<any[]>([]);
 
-  // UI state
   const [showSidebar, setShowSidebar] = useState(false);
 
   const { width } = useWindowDimensions();
-  const isWide = width >= 768; // tablet / web breakpoint
+  const isWide = width >= 768;
 
   async function getAllMessages(chatId: string) {
     axios.get(`${BASE_URL}${RagApis.getallMessages(chatId)}`).then((res) => {
@@ -53,6 +53,28 @@ export default function RagChatbotScreen() {
   async function getAllIngestedFiles() {
     axios.get(`${BASE_URL}${RagApis.getallFiles}`).then((res) => {
       setIngestions(res.data.data);
+    });
+  }
+  async function deleteIngestion(id) {
+    setSelectedChat(null);
+    axios.delete(`${BASE_URL}${RagApis.deleteFile(id)}`).then((res) => {
+      Toast.show({
+        type: 'success',
+        text1: 'Success!',
+        text2: 'file deleted successfully',
+      });
+      getAllIngestedFiles();
+    });
+  }
+  async function deleteChat(chatId) {
+    setSelectedChat(null);
+    axios.delete(`${BASE_URL}${RagApis.deleteChat(chatId)}`).then((res) => {
+      Toast.show({
+        type: 'success',
+        text1: 'Success!',
+        text2: 'chat deleted successfully',
+      });
+      getAllChats();
     });
   }
 
@@ -273,24 +295,36 @@ export default function RagChatbotScreen() {
             {ingestions.map((it) => {
               const active = selectedIngestions.includes(it.doc_id);
               return (
-                <TouchableOpacity
+                <View
                   key={it.doc_id}
-                  onPress={() => toggleIngestion(it.doc_id)}
                   className={`flex-row items-center gap-2 rounded-lg px-3 py-2 ${
                     active ? 'bg-blue-50' : 'bg-gray-50'
                   }`}>
-                  <View
-                    className={`h-4 w-4 items-center justify-center rounded border ${
-                      active ? 'border-blue-600 bg-blue-600' : 'border-gray-300'
+                  <TouchableOpacity
+                    onPress={() => toggleIngestion(it.doc_id)}
+                    className={`flex-1 flex-row items-center gap-2 rounded-lg px-3 py-2 ${
+                      active ? 'bg-blue-50' : 'bg-gray-50'
                     }`}>
-                    {active && <Text className="text-[10px] text-white">✓</Text>}
-                  </View>
-                  <Text
-                    numberOfLines={1}
-                    className={`flex-1 text-sm ${active ? 'text-blue-700' : 'text-gray-700'}`}>
-                    {it?.source}
-                  </Text>
-                </TouchableOpacity>
+                    <View
+                      className={`h-4 w-4 items-center justify-center rounded border ${
+                        active ? 'border-blue-600 bg-blue-600' : 'border-gray-300'
+                      }`}>
+                      {active && <Text className="text-[10px] text-white">✓</Text>}
+                    </View>
+                    <Text
+                      numberOfLines={1}
+                      className={`flex-1 text-sm ${active ? 'text-blue-700' : 'text-gray-700'}`}>
+                      {it?.source}
+                    </Text>
+                  </TouchableOpacity>
+                  <TrashIcon
+                    onPress={() => {
+                      deleteIngestion(it.doc_id);
+                    }}
+                    color={'red'}
+                    size={18}
+                  />
+                </View>
               );
             })}
           </View>
@@ -306,16 +340,18 @@ export default function RagChatbotScreen() {
             {allChats.map((it) => {
               const active = selectedChat === it.id;
               return (
-                <TouchableOpacity
-                  key={it.id}
-                  onPress={() => selectChat(it.id)}
-                  className={`rounded-lg px-3 py-2.5 ${active ? 'bg-blue-600' : 'bg-gray-50'}`}>
-                  <Text
-                    numberOfLines={1}
-                    className={`text-sm ${active ? 'font-medium text-white' : 'text-gray-700'}`}>
-                    {it?.title}
-                  </Text>
-                </TouchableOpacity>
+                <View key={it.id}>
+                  <TouchableOpacity
+                    onPress={() => selectChat(it.id)}
+                    className={`rounded-lg px-3 py-2.5 ${active ? 'bg-blue-600' : 'bg-gray-50'} flex-row justify-between`}>
+                    <Text
+                      numberOfLines={1}
+                      className={`text-sm ${active ? 'font-medium text-white' : 'text-gray-700'} flex-1`}>
+                      {it?.title}
+                    </Text>
+                    <TrashIcon onPress={() => deleteChat(it.id)} color={'red'} size={18} />
+                  </TouchableOpacity>
+                </View>
               );
             })}
           </View>

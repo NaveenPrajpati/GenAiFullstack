@@ -12,9 +12,12 @@ export const UserApis = {
 };
 
 export const RagApis = {
+  ingestFile: '/rag/ingest',
   getallFiles: '/rag/get-files',
+  deleteFile: (id: string) => '/rag/ingest/'.concat(id),
   getallChats: '/chat',
   getallMessages: (id: string) => '/chat/'.concat(id, '/messages'),
+  deleteChat: (id: string) => '/chat/'.concat(id),
 };
 // Learning Tracker endpoints live in the feature module: see
 // `@/features/learning/learningApi`.

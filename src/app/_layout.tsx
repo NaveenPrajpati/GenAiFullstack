@@ -5,8 +5,8 @@ import { useRouter, useSegments } from 'expo-router';
 import { Drawer } from 'expo-router/drawer';
 import { useEffect, useState } from 'react';
 import { useWindowDimensions } from 'react-native';
+import Toast from 'react-native-toast-message';
 import '../../global.css';
-
 function AppDrawer() {
   const { token, isReady } = useAuth();
   const segments = useSegments();
@@ -79,6 +79,7 @@ export default function MainLayout() {
   return (
     <AuthProvider>
       <AppDrawer />
+      <Toast />
     </AuthProvider>
   );
 }
