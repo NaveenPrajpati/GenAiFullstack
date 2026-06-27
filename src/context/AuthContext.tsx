@@ -23,6 +23,8 @@ interface AuthContextType {
   signup: (email: string, name: string, password: string) => Promise<void>;
   createGuest: () => Promise<void>;
   convertGuest: (email: string, password: string) => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
+  resetPassword: (token: string, password: string) => Promise<void>;
   fetchMe: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -95,6 +97,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [token]
   );
 
+  const forgotPassword = useCallback(async (email: string) => {
+    await apiClient().post(UserApis.forgotPassword, { email });
+  }, []);
+
+  const resetPassword = useCallback(async (resetToken: string, password: string) => {
+    await apiClient().post(UserApis.resetPassword, { token: resetToken, password });
+  }, []);
+
   const fetchMe = useCallback(async () => {
     const res = await apiClient(token).get(UserApis.me);
     const updated: User = res.data;
@@ -110,7 +120,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ token, user, isReady, login, signup, createGuest, convertGuest, fetchMe, logout }}>
+      value={{
+        token,
+        user,
+        isReady,
+        login,
+        signup,
+        createGuest,
+        convertGuest,
+        forgotPassword,
+        resetPassword,
+        fetchMe,
+        logout,
+      }}>
       {children}
     </AuthContext.Provider>
   );

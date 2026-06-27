@@ -16,8 +16,8 @@ export default function MealPlannerLayout() {
   }, [token, setAuthToken]);
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
+    <Stack screenOptions={{ headerShown: true, headerBackButtonDisplayMode: 'minimal' }}>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="plans" />
       <Stack.Screen name="plan/[id]" />
       <Stack.Screen name="grocery/[id]" />

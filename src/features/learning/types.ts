@@ -105,6 +105,17 @@ export type ChatMessage = {
  * - `approval` — the turn produced a roadmap proposal needing user approval.
  * - `error`    — the backend failed mid-stream.
  */
+/** A user auto-trigger row from `GET /learning/triggers`. */
+export type Trigger = {
+  _id: string;
+  userId: string;
+  /** e.g. 'learning_digest' — the daily digest trigger. */
+  action_type: string;
+  enabled: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type StreamEvent = {
   /** 'token' | 'result' | 'approval' | 'error' (others ignored). */
   type: string;

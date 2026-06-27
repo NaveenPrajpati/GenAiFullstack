@@ -1,3 +1,4 @@
+import ScreenHeader from '@/components/layout/ScreenHeader';
 import {
   ConflictCard,
   ProposalCard,
@@ -147,17 +148,14 @@ export default function MealPlannerChatScreen() {
 
   return (
     <View className="flex-1 bg-gray-50">
-      {/* Header */}
-      <View className="border-b border-gray-200 bg-white px-5 py-4">
-        <View className="flex-row items-center justify-between">
-          <View className="flex-1 pr-2">
-            <Text className="text-xl font-bold text-gray-900">Meal Planner</Text>
-            <Text className="mt-0.5 text-sm text-gray-500" numberOfLines={1}>
-              {activePlan
-                ? `Active: week of ${activePlan.week_start} · ${activePlan.status}`
-                : 'Your AI agent for weekly meal plans'}
-            </Text>
-          </View>
+      <ScreenHeader
+        title="Meal Planner"
+        subtitle={
+          activePlan
+            ? `Active: week of ${activePlan.week_start} · ${activePlan.status}`
+            : 'Your AI agent for weekly meal plans'
+        }
+        right={
           <TouchableOpacity
             onPress={newConversation}
             className="rounded-lg bg-gray-100 px-3 py-1.5"
@@ -165,8 +163,7 @@ export default function MealPlannerChatScreen() {
             accessibilityRole="button">
             <Text className="text-xs text-gray-600">New chat</Text>
           </TouchableOpacity>
-        </View>
-
+        }>
         <View className="mt-3 flex-row flex-wrap gap-2">
           {NAV.map((n) => (
             <TouchableOpacity
@@ -188,7 +185,7 @@ export default function MealPlannerChatScreen() {
             </TouchableOpacity>
           )}
         </View>
-      </View>
+      </ScreenHeader>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

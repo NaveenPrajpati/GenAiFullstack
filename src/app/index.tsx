@@ -46,20 +46,6 @@ const APPS = [
   },
 ] as const;
 
-import { EnrichedMarkdownText } from 'react-native-enriched-markdown';
-
-const MyComponent = () => {
-  const content = `# Hello World\nThis is **bold** text and a [Link](https://google.com).`;
-
-  return (
-    <EnrichedMarkdownText
-      markdown={content}
-      flavor="github"
-      onLinkPress={(url) => console.log('Opening:', url)}
-    />
-  );
-};
-
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -135,8 +121,6 @@ export default function HomeScreen() {
             started.
           </Text>
         </View>
-
-        <MyComponent />
 
         <View className="gap-4 p-4">
           {APPS.map((app) => (

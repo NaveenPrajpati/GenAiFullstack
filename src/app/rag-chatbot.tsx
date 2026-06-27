@@ -1,4 +1,3 @@
-import axios from 'axios';
 import * as DocumentPicker from 'expo-document-picker';
 import { DocumentPickerAsset } from 'expo-document-picker';
 import { TrashIcon } from 'lucide-react-native';
@@ -16,6 +15,7 @@ import {
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { BASE_URL, RagApis } from '../services/api';
+import { getAuthToken, http } from '../services/http';
 interface Message {
   role: 'user' | 'assistant';
   content: string;
@@ -41,23 +41,23 @@ export default function RagChatbotScreen() {
   const isWide = width >= 768;
 
   async function getAllMessages(chatId: string) {
-    axios.get(`${BASE_URL}${RagApis.getallMessages(chatId)}`).then((res) => {
+    http.get(RagApis.getallMessages(chatId)).then((res) => {
       setMessages(res.data.data.messages);
     });
   }
   async function getAllChats() {
-    axios.get(`${BASE_URL}${RagApis.getallChats}`).then((res) => {
+    http.get(RagApis.getallChats).then((res) => {
       setAllChats(res.data.data);
     });
   }
   async function getAllIngestedFiles() {
-    axios.get(`${BASE_URL}${RagApis.getallFiles}`).then((res) => {
+    http.get(RagApis.getallFiles).then((res) => {
       setIngestions(res.data.data);
     });
   }
   async function deleteIngestion(id) {
     setSelectedChat(null);
-    axios.delete(`${BASE_URL}${RagApis.deleteFile(id)}`).then((res) => {
+    http.delete(RagApis.deleteFile(id)).then(() => {
       Toast.show({
         type: 'success',
         text1: 'Success!',
@@ -68,7 +68,7 @@ export default function RagChatbotScreen() {
   }
   async function deleteChat(chatId) {
     setSelectedChat(null);
-    axios.delete(`${BASE_URL}${RagApis.deleteChat(chatId)}`).then((res) => {
+    http.delete(RagApis.deleteChat(chatId)).then(() => {
       Toast.show({
         type: 'success',
         text1: 'Success!',
@@ -121,8 +121,10 @@ export default function RagChatbotScreen() {
 
       const query = new URLSearchParams({ page: '2', isAdming: 'false' }).toString();
 
+      const authToken = await getAuthToken();
       const response = await fetch(`${BASE_URL}/rag/ingest/${action}?${query}`, {
         method: 'POST',
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
         body: formData,
       });
 
@@ -150,13 +152,18 @@ export default function RagChatbotScreen() {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
 
     try {
+      const authToken = await getAuthToken();
       const response = await fetch(`${BASE_URL}/rag/query/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
         body: JSON.stringify({
           question: userMessage,
           evaluate: true,
           ingestions: selectedIngestions,
+          chat_id: selectedChat,
         }),
       });
       if (!response.ok) throw new Error(`Error: ${response.status}`);

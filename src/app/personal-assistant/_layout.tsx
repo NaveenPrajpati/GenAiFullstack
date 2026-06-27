@@ -16,8 +16,8 @@ export default function PersonalAssistantLayout() {
   }, [token, setAuthToken]);
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
+    <Stack screenOptions={{ headerShown: true, headerBackButtonDisplayMode: 'minimal' }}>
+      <Stack.Screen name="index" options={{ headerShown: false }} />
       <Stack.Screen name="tasks" />
       <Stack.Screen name="task/[id]" />
       <Stack.Screen name="agenda" />

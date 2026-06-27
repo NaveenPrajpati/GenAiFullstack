@@ -122,6 +122,12 @@ export async function deleteMemory(token: Token) {
   return res.data;
 }
 
+/** GET /triggers — current state of the user's auto-triggers (e.g. daily digest). */
+export async function getTriggers(token: Token) {
+  const res = await apiClient(token).get(`${LR}/triggers`);
+  return res.data;
+}
+
 /** POST /toggle-trigger — flip the daily digest auto-trigger. */
 export async function toggleTrigger(token: Token) {
   const res = await apiClient(token).post(`${LR}/toggle-trigger`);

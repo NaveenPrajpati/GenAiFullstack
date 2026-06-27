@@ -20,12 +20,15 @@ function AppDrawer() {
   }, []);
 
   const inAuth = segments[0] === 'auth';
+  // convert-guest is an authenticated auth route: a logged-in guest visits it to
+  // upgrade, so it must be exempt from the "token → leave auth" redirect.
+  const onConvertGuest = inAuth && segments.includes('convert-guest');
 
   useEffect(() => {
     if (!mounted || !isReady) return;
     if (!token && !inAuth) {
       router.replace('/auth/login');
-    } else if (token && inAuth) {
+    } else if (token && inAuth && !onConvertGuest) {
       router.replace('/');
     }
   }, [token, segments, mounted, isReady]);
@@ -41,7 +44,6 @@ function AppDrawer() {
         headerShadowVisible: false,
 
         headerLeft: () => <DrawerToggleButton tintColor="#374151" />,
-        // When hidden, collapse to a non-permanent, non-swipeable drawer.
         drawerType: !showDrawer ? 'front' : isMobile ? 'front' : 'permanent',
         drawerStyle: { width: 256, backgroundColor: '#111827' },
         swipeEnabled: showDrawer && isMobile,
@@ -49,27 +51,18 @@ function AppDrawer() {
       }}>
       <Drawer.Screen name="index" options={{ drawerLabel: 'Home' }} />
       <Drawer.Screen name="rag-chatbot" options={{ headerTitle: 'Rag Chatbot' }} />
-      <Drawer.Screen name="meal-planner" options={{ drawerLabel: 'Meal planner' }} />
       <Drawer.Screen
-        name="learning"
-        options={{ drawerLabel: 'Learning', headerTitle: 'Learning' }}
+        name="meal-planner"
+        options={{ drawerLabel: 'Meal planner', headerShown: false }}
       />
-      <Drawer.Screen name="personal-assistant" options={{ drawerLabel: 'Personal Assistant' }} />
+      <Drawer.Screen name="learning" options={{ drawerLabel: 'Learning', headerShown: false }} />
       <Drawer.Screen
-        name="auth/login"
+        name="personal-assistant"
+        options={{ drawerLabel: 'Personal Assistant', headerShown: false }}
+      />
+      <Drawer.Screen
+        name="auth"
         options={{ drawerItemStyle: { display: 'none' }, headerShown: false, swipeEnabled: false }}
-      />
-      <Drawer.Screen
-        name="auth/signup"
-        options={{ drawerItemStyle: { display: 'none' }, headerShown: false, swipeEnabled: false }}
-      />
-      <Drawer.Screen
-        name="auth/convert-guest"
-        options={{
-          drawerItemStyle: { display: 'none' },
-          headerTitle: 'Complete Registration',
-          swipeEnabled: false,
-        }}
       />
     </Drawer>
   );

@@ -13,8 +13,10 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /* ─── Message card sub-components ─── */
 
@@ -247,14 +249,25 @@ function Bubble({
 export default function ChatScreen() {
   const { token } = useAuth();
   const router = useRouter();
-  const { prefill, roadmapId } = useLocalSearchParams<{
+  const { prefill, roadmapId, source } = useLocalSearchParams<{
     prefill?: string;
     roadmapId?: string;
+    source?: string;
   }>();
+  // The RAG path answers via the streaming endpoint; every other path uses the
+  // plain (non-streaming) POST /query.
+  const useStream = source === 'rag';
   const scrollRef = useRef<ScrollView>(null);
   const [input, setInput] = useState(prefill ?? '');
   const [approving, setApproving] = useState(false);
   const [approvalError, setApprovalError] = useState('');
+
+  // The learning Stack renders a native header above this screen, so offset the
+  // KeyboardAvoidingView by its height or the input bar sits under the keyboard.
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isMobile = width <= 500;
+  const headerHeight = Platform.OS === 'ios' && isMobile ? insets.top + 44 : 0;
 
   const { chatMessages, chatLoading, sendChatMessage, resolveProposal, resetChat } =
     useLearningStore();
@@ -267,7 +280,7 @@ export default function ChatScreen() {
     if (!input.trim() || chatLoading || !token) return;
     const text = input.trim();
     setInput('');
-    sendChatMessage(token, text, roadmapId);
+    sendChatMessage(token, text, roadmapId, useStream);
   };
 
   const handleApprove = async () => {
@@ -296,17 +309,11 @@ export default function ChatScreen() {
 
   return (
     <View className="flex-1 bg-gray-50">
-      {/* Header */}
       <View className="border-b border-gray-200 bg-white px-5 py-4">
         <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center gap-3">
-            <TouchableOpacity onPress={() => router.back()}>
-              <Text className="text-sm text-violet-600">← Back</Text>
-            </TouchableOpacity>
-            <View>
-              <Text className="text-base font-bold text-gray-900">AI Tutor</Text>
-              {!!roadmapId && <Text className="text-xs text-gray-400">Roadmap context active</Text>}
-            </View>
+          <View>
+            <Text className="text-base font-bold text-gray-900">AI Tutor</Text>
+            {!!roadmapId && <Text className="text-xs text-gray-400">Roadmap context active</Text>}
           </View>
           <TouchableOpacity
             onPress={resetChat}
@@ -319,8 +326,8 @@ export default function ChatScreen() {
 
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        className="flex-1">
-        {/* Messages */}
+        keyboardVerticalOffset={headerHeight}
+        style={{ flex: 1 }}>
         <ScrollView
           ref={scrollRef}
           className="flex-1 px-4 pt-4"

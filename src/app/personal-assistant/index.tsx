@@ -1,3 +1,4 @@
+import ScreenHeader from '@/components/layout/ScreenHeader';
 import {
   AgendaCard,
   ApprovalCard,
@@ -131,13 +132,10 @@ export default function AssistantChatScreen() {
 
   return (
     <View className="flex-1 bg-gray-50">
-      {/* Header */}
-      <View className="border-b border-gray-200 bg-white px-5 py-4">
-        <View className="flex-row items-center justify-between">
-          <View>
-            <Text className="text-xl font-bold text-gray-900">Personal Assistant</Text>
-            <Text className="mt-0.5 text-sm text-gray-500">Your AI agent for tasks & more</Text>
-          </View>
+      <ScreenHeader
+        title="Personal Assistant"
+        subtitle="Your AI agent for tasks & more"
+        right={
           <TouchableOpacity
             onPress={newConversation}
             className="rounded-lg bg-gray-100 px-3 py-1.5"
@@ -145,8 +143,7 @@ export default function AssistantChatScreen() {
             accessibilityRole="button">
             <Text className="text-xs text-gray-600">New chat</Text>
           </TouchableOpacity>
-        </View>
-
+        }>
         {/* Section nav */}
         <View className="mt-3 flex-row flex-wrap gap-2">
           {NAV.map((n) => (
@@ -160,7 +157,7 @@ export default function AssistantChatScreen() {
             </TouchableOpacity>
           ))}
         </View>
-      </View>
+      </ScreenHeader>
 
       <KeyboardAvoidingView
         // Android resizes the window automatically (adjustResize), so only iOS

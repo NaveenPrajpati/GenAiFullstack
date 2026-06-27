@@ -1,3 +1,4 @@
+import ScreenHeader from '@/components/layout/ScreenHeader';
 import { useAuth } from '@/context/AuthContext';
 import { useLearningStore } from '@/features/learning/store';
 import type { Roadmap } from '@/features/learning/types';
@@ -22,14 +23,11 @@ export default function RoadmapsScreen() {
 
   return (
     <View className="flex-1 bg-gray-50">
-      {/* Header */}
-      <View className="border-b border-gray-200 bg-white px-5 py-4">
-        <View className="flex-row items-center justify-between">
-          <View>
-            <Text className="text-xl font-bold text-gray-900">Learning</Text>
-            <Text className="mt-1 text-sm text-gray-500">Your roadmaps</Text>
-          </View>
-          <View className="flex-row gap-2">
+      <ScreenHeader
+        title="Learning"
+        subtitle="Your roadmaps"
+        right={
+          <>
             <TouchableOpacity
               onPress={() => router.push('/learning/digests')}
               className="rounded-lg bg-gray-100 px-3 py-2">
@@ -40,9 +38,9 @@ export default function RoadmapsScreen() {
               className="rounded-lg bg-gray-100 px-3 py-2">
               <Text className="text-xs font-medium text-gray-700">Settings</Text>
             </TouchableOpacity>
-          </View>
-        </View>
-      </View>
+          </>
+        }
+      />
 
       <ScrollView className="flex-1 p-4" contentContainerStyle={{ paddingBottom: 24 }}>
         {roadmapsLoading && (

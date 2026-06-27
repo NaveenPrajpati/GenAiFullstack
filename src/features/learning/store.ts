@@ -17,6 +17,7 @@ import type {
   QuizQuestion,
   QuizResult,
   Roadmap,
+  Trigger,
 } from './types';
 
 const genId = () =>
@@ -85,7 +86,12 @@ type LearningState = {
   chatLoading: boolean;
   chatError: string;
   pendingProposal: Proposal | null;
-  sendChatMessage: (token: string, text: string, roadmapId?: string) => Promise<void>;
+  sendChatMessage: (
+    token: string,
+    text: string,
+    roadmapId?: string,
+    stream?: boolean
+  ) => Promise<void>;
   resolveProposal: (
     token: string,
     decision: 'approved' | 'rejected'
@@ -113,8 +119,19 @@ type LearningState = {
   deleteMemory: (token: string) => Promise<void>;
 
   digestEnabled: boolean;
+  digestLoading: boolean;
+  fetchTriggers: (token: string) => Promise<void>;
   toggleDigest: (token: string) => Promise<void>;
 };
+
+/**
+ * Pulls the daily-digest on/off flag out of the `{ result: Trigger[] }`
+ * response from GET /triggers, matching the `learning_digest` action.
+ */
+function readDigestEnabled(triggers: Trigger[]): boolean {
+  const digest = triggers.find((t) => t.action_type === 'learning_digest');
+  return !!digest?.enabled;
+}
 
 export const useLearningStore = create<LearningState>((set, get) => ({
   roadmaps: [],
@@ -155,7 +172,7 @@ export const useLearningStore = create<LearningState>((set, get) => ({
   chatLoading: false,
   chatError: '',
   pendingProposal: null,
-  sendChatMessage: async (token, text, roadmapId) => {
+  sendChatMessage: async (token, text, roadmapId, stream = false) => {
     const threadId = get().chatThreadId;
     set((s) => ({
       chatMessages: [...s.chatMessages, { id: genId(), role: 'user', content: text }],
@@ -180,52 +197,71 @@ export const useLearningStore = create<LearningState>((set, get) => ({
         chatMessages: s.chatMessages.map((m) => (m.id === assistantId ? { ...m, ...p } : m)),
       }));
 
+    // Renders a `needs_approval` payload as a proposal card. Shared by the
+    // streaming and non-streaming paths.
+    const applyApproval = (event: any) => {
+      ensureAssistant();
+      const proposal: Proposal = {
+        type: event.proposal?.type,
+        approvalId: event.proposal?.approvalId,
+        roadmap: event.proposal?.roadmap,
+        threadId: event.thread_id ?? threadId,
+      };
+      set((s) => ({
+        pendingProposal: proposal,
+        chatThreadId: event.thread_id ?? s.chatThreadId,
+      }));
+      patch({
+        content: "I've prepared a roadmap for you. Please review it below.",
+        data: { type: 'approval_request', proposal },
+        streaming: false,
+      });
+    };
+
+    // Renders a structured turn result (explain / quiz / resources / …) and
+    // applies its side effects. Shared by both paths.
+    const applyResult = (event: any) => {
+      ensureAssistant();
+      const result = event.result ?? event;
+      const { content, msgData } = interpretResult(result);
+      patch({ content, data: msgData, streaming: false });
+      if (result?.intent === 'quiz') {
+        set({ activeQuiz: { questions: result.quiz ?? [], quizId: result.quizId ?? '' } });
+      } else if (result?.intent === 'update_progress' && result.roadmap) {
+        set((s) => ({
+          roadmaps: s.roadmaps.map((r) => (r._id === result.roadmap._id ? result.roadmap : r)),
+        }));
+      }
+    };
+
     try {
+      const body = { text, ...(roadmapId ? { roadmapId } : {}), thread_id: threadId };
+
+      // Non-streaming path: one POST /query that returns the whole turn at once.
+      if (!stream) {
+        const data = await api.query(token, body);
+        if (data?.type === 'approval' || data?.status === 'needs_approval') {
+          applyApproval(data);
+        } else {
+          applyResult(data);
+        }
+        return;
+      }
+
       let streamedText = '';
       let handledStructured = false;
 
-      for await (const event of api.queryStream(token, {
-        text,
-        ...(roadmapId ? { roadmapId } : {}),
-        thread_id: threadId,
-      })) {
+      for await (const event of api.queryStream(token, body)) {
         if (event.type === 'token') {
           ensureAssistant();
           streamedText += event.token ?? '';
           patch({ content: streamedText });
         } else if (event.type === 'approval' || event.status === 'needs_approval') {
-          ensureAssistant();
           handledStructured = true;
-          const proposal: Proposal = {
-            type: event.proposal?.type,
-            approvalId: event.proposal?.approvalId,
-            roadmap: event.proposal?.roadmap,
-            threadId: event.thread_id ?? threadId,
-          };
-          set((s) => ({
-            pendingProposal: proposal,
-            chatThreadId: event.thread_id ?? s.chatThreadId,
-          }));
-          patch({
-            content: "I've prepared a roadmap for you. Please review it below.",
-            data: { type: 'approval_request', proposal },
-            streaming: false,
-          });
+          applyApproval(event);
         } else if (event.type === 'result' || event.intent || event.result) {
-          ensureAssistant();
           handledStructured = true;
-          const result = event.result ?? event;
-          const { content, msgData } = interpretResult(result);
-          patch({ content, data: msgData, streaming: false });
-          if (result?.intent === 'quiz') {
-            set({ activeQuiz: { questions: result.quiz ?? [], quizId: result.quizId ?? '' } });
-          } else if (result?.intent === 'update_progress' && result.roadmap) {
-            set((s) => ({
-              roadmaps: s.roadmaps.map((r) =>
-                r._id === result.roadmap._id ? result.roadmap : r
-              ),
-            }));
-          }
+          applyResult(event);
         } else if (event.type === 'error') {
           throw new Error(event.detail ?? 'Stream error');
         }
@@ -306,6 +342,18 @@ export const useLearningStore = create<LearningState>((set, get) => ({
   },
 
   digestEnabled: false,
+  digestLoading: false,
+  fetchTriggers: async (token) => {
+    set({ digestLoading: true });
+    try {
+      const data = await api.getTriggers(token);
+      set({ digestEnabled: readDigestEnabled(data.result ?? []) });
+    } catch {
+      // Leave digestEnabled untouched if the trigger state can't be loaded.
+    } finally {
+      set({ digestLoading: false });
+    }
+  },
   toggleDigest: async (token) => {
     const data = await api.toggleTrigger(token);
     set({ digestEnabled: data.enabled });

@@ -39,6 +39,8 @@ export default function SettingsScreen() {
     saveMemory,
     deleteMemory,
     digestEnabled,
+    digestLoading,
+    fetchTriggers,
     toggleDigest,
   } = useLearningStore();
 
@@ -56,7 +58,10 @@ export default function SettingsScreen() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (token) fetchMemory(token);
+    if (token) {
+      fetchMemory(token);
+      fetchTriggers(token);
+    }
   }, [token]);
 
   useEffect(() => {
@@ -126,6 +131,7 @@ export default function SettingsScreen() {
     setToggling(true);
     try {
       await toggleDigest(token);
+      fetchTriggers(token);
     } finally {
       setToggling(false);
     }
@@ -138,10 +144,6 @@ export default function SettingsScreen() {
     <View className="flex-1 bg-gray-50">
       {/* Header */}
       <View className="border-b border-gray-200 bg-white px-5 py-4">
-        <TouchableOpacity onPress={() => router.back()} className="mb-2">
-          <Text className="text-sm text-violet-600">← Back</Text>
-        </TouchableOpacity>
-        <Text className="text-xl font-bold text-gray-900">Settings</Text>
         <Text className="mt-1 text-sm text-gray-500">Personalize your learning experience</Text>
       </View>
 
@@ -155,7 +157,7 @@ export default function SettingsScreen() {
                 Receive AI-curated summaries of your roadmap topics each day
               </Text>
             </View>
-            {toggling ? (
+            {toggling || digestLoading ? (
               <ActivityIndicator size="small" />
             ) : (
               <Switch
