@@ -32,6 +32,20 @@ const genId = () =>
 const errMsg = (e: any, fallback: string): string =>
   e?.response?.data?.detail ?? e?.message ?? fallback;
 
+/** Human-friendly label for a graph node, shown live as the turn streams. */
+const PA_STEP_LABELS: Record<string, string> = {
+  load_memory: 'Loading your context…',
+  classify_intent: 'Understanding your request…',
+  todo_agent: 'Updating your tasks…',
+  research_agent: 'Researching…',
+  notes_agent: 'Saving to memory…',
+  agenda_agent: 'Checking your agenda…',
+  breakdown_agent: 'Breaking it down…',
+  synthesize: 'Wrapping up…',
+};
+const stepLabel = (node?: string): string =>
+  (node && PA_STEP_LABELS[node]) || 'Working…';
+
 interface PAState {
   // ── auth ──
   token: string | null;
@@ -109,38 +123,76 @@ export const usePersonalAssistantStore = create<PAState>((set, get) => ({
       chatLoading: true,
     }));
 
-    try {
-      const data = await api.query(token, trimmed, threadId);
-
-      if (data.status === 'needs_approval') {
-        set((s) => ({
-          threadId: data.thread_id ?? s.threadId,
-          pendingApproval: { ...data.proposal, threadId: data.thread_id ?? s.threadId },
+    // A transient assistant bubble shows live per-node progress while the graph
+    // runs; it's removed once a terminal event arrives so the existing done /
+    // needs_approval handling can append the real reply unchanged.
+    let progressId: string | null = null;
+    const showProgress = (label: string) =>
+      set((s) => {
+        if (progressId) {
+          return {
+            messages: s.messages.map((m) => (m.id === progressId ? { ...m, text: label } : m)),
+          };
+        }
+        progressId = genId();
+        return {
+          chatLoading: false,
           messages: [
             ...s.messages,
-            {
-              id: genId(),
-              role: 'assistant',
-              text: 'Please confirm — this will permanently delete the following task(s).',
-              approval: data.proposal,
-            },
+            { id: progressId, role: 'assistant', text: label, streaming: true },
           ],
-        }));
-        return;
-      }
+        };
+      });
+    const clearProgress = () => {
+      if (!progressId) return;
+      const id = progressId;
+      progressId = null;
+      set((s) => ({ messages: s.messages.filter((m) => m.id !== id) }));
+    };
 
-      set((s) => ({
-        messages: [
-          ...s.messages,
-          {
-            id: genId(),
-            role: 'assistant',
-            text: data.result.response ?? '',
-            result: data.result,
-          },
-        ],
-      }));
+    try {
+      for await (const event of api.queryStream(token, { text: trimmed, thread_id: threadId })) {
+        if (event.type === 'thread') {
+          if (event.thread_id) set({ threadId: event.thread_id });
+        } else if (event.type === 'step') {
+          showProgress(stepLabel(event.node));
+        } else if (event.type === 'needs_approval' && event.proposal) {
+          clearProgress();
+          set((s) => ({
+            threadId: event.thread_id ?? s.threadId,
+            pendingApproval: { ...event.proposal!, threadId: event.thread_id ?? s.threadId },
+            messages: [
+              ...s.messages,
+              {
+                id: genId(),
+                role: 'assistant',
+                text: 'Please confirm — this will permanently delete the following task(s).',
+                approval: event.proposal,
+              },
+            ],
+          }));
+          return;
+        } else if (event.type === 'done') {
+          clearProgress();
+          const result = event.result;
+          set((s) => ({
+            messages: [
+              ...s.messages,
+              {
+                id: genId(),
+                role: 'assistant',
+                text: result?.response ?? '',
+                result,
+              },
+            ],
+          }));
+          return;
+        } else if (event.type === 'error') {
+          throw new Error(event.message ?? 'Stream error');
+        }
+      }
     } catch (e: any) {
+      clearProgress();
       const text = errMsg(e, 'Something went wrong. Please try again.');
       set((s) => ({
         messages: [...s.messages, { id: genId(), role: 'assistant', text, isError: true }],

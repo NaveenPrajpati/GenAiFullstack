@@ -2,6 +2,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useLearningStore } from '@/features/learning/store';
 import type { Roadmap, TopicNode } from '@/features/learning/types';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Clock } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
@@ -78,17 +79,15 @@ export default function RoadmapDetail() {
     <View className="flex-1 bg-gray-50">
       {/* Header */}
       <View className="border-b border-gray-200 bg-white px-5 py-4">
-        <TouchableOpacity onPress={() => router.back()} className="mb-2">
-          <Text className="text-sm text-violet-600">← Back</Text>
-        </TouchableOpacity>
         <Text className="text-xl font-bold text-gray-900">{roadmap.title}</Text>
         <Text className="mt-0.5 text-sm text-gray-500" numberOfLines={2}>
           {roadmap.summary}
         </Text>
         {roadmap.total_estimated_hours && (
-          <Text className="mt-0.5 text-xs text-gray-400">
-            ~{roadmap.total_estimated_hours}h total
-          </Text>
+          <View className="mt-0.5 flex-row items-center gap-x-1">
+            <Clock size={12} />
+            <Text className="text-xs text-gray-400">{roadmap.total_estimated_hours}h total</Text>
+          </View>
         )}
         {/* Progress bar */}
         <View className="mt-3 h-2 overflow-hidden rounded-full bg-gray-100">
@@ -149,9 +148,10 @@ export default function RoadmapDetail() {
                         <Text className="ml-2 text-xs text-gray-400">{isExpanded ? '▲' : '▼'}</Text>
                       </View>
                       {topic.estimated_hours ? (
-                        <Text className="mt-0.5 text-xs text-gray-400">
-                          ~{topic.estimated_hours}h
-                        </Text>
+                        <View className="mt-0.5 flex-row items-center gap-x-1">
+                          <Clock size={12} />
+                          <Text className="text-sm text-gray-400">{topic.estimated_hours}h</Text>
+                        </View>
                       ) : null}
                     </TouchableOpacity>
                   </View>

@@ -24,7 +24,7 @@ export type Roadmap = {
   total_estimated_hours?: number;
   stages: string[];
   topics: TopicNode[];
-  userId?: string;
+  user_id?: string;
   createdAt?: string;
 };
 
@@ -108,10 +108,14 @@ export type ChatMessage = {
 /** A user auto-trigger row from `GET /learning/triggers`. */
 export type Trigger = {
   _id: string;
-  userId: string;
+  user_id: string;
   /** e.g. 'learning_digest' — the daily digest trigger. */
   action_type: string;
   enabled: boolean;
+  /** Hour of day (0–23) the digest is sent at, in `timezone`. */
+  schedule_hour?: number;
+  /** IANA timezone name, e.g. 'Asia/Kolkata'. */
+  timezone?: string;
   createdAt?: string;
   updatedAt?: string;
 };

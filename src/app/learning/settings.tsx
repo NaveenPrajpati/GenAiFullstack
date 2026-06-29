@@ -39,9 +39,13 @@ export default function SettingsScreen() {
     saveMemory,
     deleteMemory,
     digestEnabled,
+    digestHour,
+    digestTimezone,
     digestLoading,
+    digestSaving,
     fetchTriggers,
     toggleDigest,
+    saveTriggerSettings,
   } = useLearningStore();
 
   const [form, setForm] = useState<FormState>({
@@ -57,12 +61,40 @@ export default function SettingsScreen() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
 
+  // Local, editable copy of the digest schedule; synced from the store once the
+  // triggers load and saved back via PATCH /trigger-settings.
+  const [hour, setHour] = useState(digestHour);
+  const [tz, setTz] = useState(digestTimezone);
+  const [scheduleSaved, setScheduleSaved] = useState(false);
+  const [scheduleError, setScheduleError] = useState('');
+
   useEffect(() => {
     if (token) {
       fetchMemory(token);
       fetchTriggers(token);
     }
   }, [token]);
+
+  useEffect(() => {
+    setHour(digestHour);
+    setTz(digestTimezone);
+  }, [digestHour, digestTimezone]);
+
+  const scheduleDirty = hour !== digestHour || tz.trim() !== digestTimezone;
+
+  const formatHour = (h: number) => `${String(h).padStart(2, '0')}:00`;
+
+  const handleSaveSchedule = async () => {
+    if (!token) return;
+    setScheduleError('');
+    try {
+      await saveTriggerSettings(token, { schedule_hour: hour, timezone: tz.trim() });
+      setScheduleSaved(true);
+      setTimeout(() => setScheduleSaved(false), 2000);
+    } catch (e: any) {
+      setScheduleError(e?.response?.data?.detail ?? 'Failed to save schedule.');
+    }
+  };
 
   useEffect(() => {
     if (memory) {
@@ -168,6 +200,69 @@ export default function SettingsScreen() {
               />
             )}
           </View>
+
+          {!digestLoading && (
+            <View className="mt-4 border-t border-gray-100 pt-4">
+              <Text className="mb-2 text-xs font-semibold text-gray-500">Delivery time</Text>
+              <View className="flex-row items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+                <TouchableOpacity
+                  onPress={() => setHour((h) => (h + 23) % 24)}
+                  className="h-9 w-9 items-center justify-center rounded-lg bg-white"
+                  activeOpacity={0.7}>
+                  <Text className="text-lg font-semibold text-gray-700">−</Text>
+                </TouchableOpacity>
+                <Text className="text-base font-semibold text-gray-900">{formatHour(hour)}</Text>
+                <TouchableOpacity
+                  onPress={() => setHour((h) => (h + 1) % 24)}
+                  className="h-9 w-9 items-center justify-center rounded-lg bg-white"
+                  activeOpacity={0.7}>
+                  <Text className="text-lg font-semibold text-gray-700">+</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text className="mt-4 mb-1 text-xs font-semibold text-gray-500">Timezone</Text>
+              <TextInput
+                className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800"
+                placeholder="e.g. Asia/Kolkata"
+                placeholderTextColor="#9ca3af"
+                autoCapitalize="none"
+                autoCorrect={false}
+                value={tz}
+                onChangeText={setTz}
+              />
+
+              {!!scheduleError && (
+                <View className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3">
+                  <Text className="text-sm text-red-700">{scheduleError}</Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                onPress={handleSaveSchedule}
+                disabled={digestSaving || !scheduleDirty || !tz.trim()}
+                className={`mt-3 items-center rounded-xl py-3 ${
+                  digestSaving
+                    ? 'bg-gray-300'
+                    : scheduleSaved
+                      ? 'bg-green-500'
+                      : !scheduleDirty || !tz.trim()
+                        ? 'bg-gray-200'
+                        : 'bg-violet-600'
+                }`}
+                activeOpacity={0.8}>
+                {digestSaving ? (
+                  <ActivityIndicator size="small" color="white" />
+                ) : (
+                  <Text
+                    className={`text-sm font-semibold ${
+                      !scheduleDirty || !tz.trim() ? 'text-gray-500' : 'text-white'
+                    }`}>
+                    {scheduleSaved ? 'Saved!' : 'Save schedule'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* Learning Profile */}

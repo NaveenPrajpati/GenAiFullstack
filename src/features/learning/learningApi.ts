@@ -133,3 +133,16 @@ export async function toggleTrigger(token: Token) {
   const res = await apiClient(token).post(`${LR}/toggle-trigger`);
   return res.data;
 }
+
+/**
+ * PATCH /trigger-settings — update the daily digest's enabled flag, send hour,
+ * and/or timezone. Upserts, so it works even before the first toggle. The
+ * backend validates the hour range and the timezone (zoneinfo).
+ */
+export async function updateTriggerSettings(
+  token: Token,
+  body: { enabled?: boolean; schedule_hour?: number; timezone?: string }
+) {
+  const res = await apiClient(token).patch(`${LR}/trigger-settings`, body);
+  return res.data;
+}

@@ -18,6 +18,7 @@ import type {
   PendingApproval,
   Plan,
   QueryResponse,
+  StreamEvent,
 } from './types';
 
 // BASE_URL already ends with `/api`, so the feature root is `/api/meal-planner`.
@@ -41,6 +42,55 @@ export async function query(
     ...(opts.threadId ? { thread_id: opts.threadId } : {}),
   });
   return res.data as QueryResponse;
+}
+
+/**
+ * POST /query/stream — same turn as `query`, streamed as Server-Sent Events.
+ * Yields each parsed event (`thread` / `step` / `done` / `needs_approval` /
+ * `error`) as it arrives. axios can't read a streaming body in React Native, so
+ * this uses `fetch` directly with the same `Authorization: Bearer …` header.
+ * Pass `signal` to cancel an in-flight stream.
+ */
+export async function* queryStream(
+  token: Token,
+  body: { text: string; plan_id?: string | null; thread_id?: string },
+  signal?: AbortSignal
+): AsyncGenerator<StreamEvent> {
+  const res = await fetch(`${MP}/query/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!res.ok) throw new Error(`Error ${res.status}`);
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error('Response body is not readable');
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    // Buffer across chunk boundaries so a line split mid-chunk isn't dropped.
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data:')) continue;
+      const payload = trimmed.slice(5).trim();
+      if (!payload || payload === '[DONE]') continue;
+      try {
+        yield JSON.parse(payload) as StreamEvent;
+      } catch {
+        // Ignore keep-alive pings / non-JSON lines.
+      }
+    }
+  }
 }
 
 /** POST /approve — resolve a pending plan/update proposal. */

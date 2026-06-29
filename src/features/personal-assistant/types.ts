@@ -87,6 +87,22 @@ export type QueryResponse =
   | { status: 'done'; result: AgentResult }
   | { status: 'needs_approval'; thread_id: string; proposal: DeleteProposal };
 
+/**
+ * SSE event from POST /personal-assistant/query/stream. The PA graph uses
+ * structured output (no text tokens), so streaming surfaces per-node `step`
+ * progress, then a terminal `done` result or `needs_approval` proposal.
+ */
+export interface StreamEvent {
+  /** 'thread' | 'step' | 'done' | 'needs_approval' | 'error' (others ignored). */
+  type: string;
+  node?: string;
+  thread_id?: string;
+  result?: AgentResult;
+  proposal?: DeleteProposal;
+  message?: string;
+  [key: string]: unknown;
+}
+
 /** Loosely-typed: GET /approve returns a mix of digests and pending delete approvals. */
 export interface PendingApproval {
   id?: string;
@@ -119,4 +135,6 @@ export interface ChatMessage {
   /** Set once a HITL approval has been resolved, to lock the card. */
   resolved?: 'approved' | 'rejected';
   isError?: boolean;
+  /** True while a transient progress bubble is streaming step updates. */
+  streaming?: boolean;
 }

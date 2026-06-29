@@ -1,3 +1,4 @@
+import { useAuth } from '@/context/AuthContext';
 import * as DocumentPicker from 'expo-document-picker';
 import { DocumentPickerAsset } from 'expo-document-picker';
 import { TrashIcon } from 'lucide-react-native';
@@ -31,10 +32,12 @@ export default function RagChatbotScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const [asset, setAsset] = useState<DocumentPickerAsset | null>(null);
   const [ingestions, setIngestions] = useState<any[]>([]);
+  const [ingestionsLoading, setIngestionsLoading] = useState(true);
   const [selectedIngestions, setSelectedIngestions] = useState<any[]>([]);
   const [selectedChat, setSelectedChat] = useState<any>(null);
   const [allChats, setAllChats] = useState<any[]>([]);
-
+  const [chatsLoading, setChatsLoading] = useState(true);
+  const { user, logout } = useAuth();
   const [showSidebar, setShowSidebar] = useState(false);
 
   const { width } = useWindowDimensions();
@@ -46,14 +49,22 @@ export default function RagChatbotScreen() {
     });
   }
   async function getAllChats() {
-    http.get(RagApis.getallChats).then((res) => {
-      setAllChats(res.data.data);
-    });
+    setChatsLoading(true);
+    http
+      .get(RagApis.getallChats)
+      .then((res) => {
+        setAllChats(res.data.data);
+      })
+      .finally(() => setChatsLoading(false));
   }
   async function getAllIngestedFiles() {
-    http.get(RagApis.getallFiles).then((res) => {
-      setIngestions(res.data.data);
-    });
+    setIngestionsLoading(true);
+    http
+      .get(RagApis.getallFiles)
+      .then((res) => {
+        setIngestions(res.data.data);
+      })
+      .finally(() => setIngestionsLoading(false));
   }
   async function deleteIngestion(id) {
     setSelectedChat(null);
@@ -295,7 +306,12 @@ export default function RagChatbotScreen() {
         <Text className="mb-2 text-xs font-semibold tracking-wide text-gray-400 uppercase">
           Sources
         </Text>
-        {ingestions.length === 0 ? (
+        {ingestionsLoading ? (
+          <View className="mb-4 flex-row items-center gap-2 py-2">
+            <ActivityIndicator size="small" color="#3b82f6" />
+            <Text className="text-xs text-gray-400">Loading sources…</Text>
+          </View>
+        ) : ingestions.length === 0 ? (
           <Text className="mb-4 text-xs text-gray-400">No sources yet</Text>
         ) : (
           <View className="mb-5 gap-1.5">
@@ -324,13 +340,15 @@ export default function RagChatbotScreen() {
                       {it?.source}
                     </Text>
                   </TouchableOpacity>
-                  <TrashIcon
-                    onPress={() => {
-                      deleteIngestion(it.doc_id);
-                    }}
-                    color={'red'}
-                    size={18}
-                  />
+                  {user?.role == 'admin' && (
+                    <TrashIcon
+                      onPress={() => {
+                        deleteIngestion(it.doc_id);
+                      }}
+                      color={'red'}
+                      size={18}
+                    />
+                  )}
                 </View>
               );
             })}
@@ -340,7 +358,12 @@ export default function RagChatbotScreen() {
         <Text className="mb-2 text-xs font-semibold tracking-wide text-gray-400 uppercase">
           Chats
         </Text>
-        {allChats.length === 0 ? (
+        {chatsLoading ? (
+          <View className="flex-row items-center gap-2 py-2">
+            <ActivityIndicator size="small" color="#3b82f6" />
+            <Text className="text-xs text-gray-400">Loading chats…</Text>
+          </View>
+        ) : allChats.length === 0 ? (
           <Text className="text-xs text-gray-400">No chats yet</Text>
         ) : (
           <View className="gap-1">
@@ -356,7 +379,9 @@ export default function RagChatbotScreen() {
                       className={`text-sm ${active ? 'font-medium text-white' : 'text-gray-700'} flex-1`}>
                       {it?.title}
                     </Text>
-                    <TrashIcon onPress={() => deleteChat(it.id)} color={'red'} size={18} />
+                    {user?.role == 'admin' && (
+                      <TrashIcon onPress={() => deleteChat(it.id)} color={'red'} size={18} />
+                    )}
                   </TouchableOpacity>
                 </View>
               );

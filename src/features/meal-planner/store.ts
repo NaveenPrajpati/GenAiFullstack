@@ -31,6 +31,18 @@ const genId = () =>
 const errMsg = (e: any, fallback: string): string =>
   e?.response?.data?.detail ?? e?.message ?? fallback;
 
+/** Human-friendly label for a graph node, shown live as the turn streams. */
+const MP_STEP_LABELS: Record<string, string> = {
+  load_memory: 'Loading your preferences…',
+  classify_intent: 'Understanding your request…',
+  log_agent: 'Logging your meal…',
+  query_agent: 'Checking your plan…',
+  research_agent: 'Researching…',
+  plan_agent: 'Building your plan…',
+};
+const stepLabel = (node?: string): string =>
+  (node && MP_STEP_LABELS[node]) || 'Working…';
+
 interface MealPlannerState {
   // ── auth ──
   token: string | null;
@@ -115,58 +127,105 @@ export const useMealPlannerStore = create<MealPlannerState>((set, get) => ({
       chatLoading: true,
     }));
 
+    // Transient bubble showing live per-node progress; removed before the
+    // existing terminal handling appends the real reply.
+    let progressId: string | null = null;
+    const showProgress = (label: string) =>
+      set((s) => {
+        if (progressId) {
+          return {
+            messages: s.messages.map((m) => (m.id === progressId ? { ...m, text: label } : m)),
+          };
+        }
+        progressId = genId();
+        return {
+          chatLoading: false,
+          messages: [
+            ...s.messages,
+            { id: progressId, role: 'assistant', text: label, streaming: true },
+          ],
+        };
+      });
+    const clearProgress = () => {
+      if (!progressId) return;
+      const id = progressId;
+      progressId = null;
+      set((s) => ({ messages: s.messages.filter((m) => m.id !== id) }));
+    };
+
     try {
       // Always forward the active plan id when we have one — update/regenerate
       // requests require it, and it's harmless for plan/log/query/research.
-      const data = await api.query(token, trimmed, { planId: activePlanId, threadId });
+      for await (const event of api.queryStream(token, {
+        text: trimmed,
+        plan_id: activePlanId,
+        thread_id: threadId,
+      })) {
+        if (event.type === 'thread') {
+          if (event.thread_id) set({ threadId: event.thread_id });
+          continue;
+        }
+        if (event.type === 'step') {
+          showProgress(stepLabel(event.node));
+          continue;
+        }
+        if (event.type === 'error') {
+          throw new Error(event.message ?? 'Stream error');
+        }
+        if (event.type === 'needs_approval' && event.proposal) {
+          clearProgress();
+          const proposal = event.proposal;
+          set((s) => ({
+            threadId: event.thread_id ?? s.threadId,
+            pendingApproval: { ...proposal, threadId: event.thread_id ?? s.threadId },
+            messages: [
+              ...s.messages,
+              {
+                id: genId(),
+                role: 'assistant',
+                text:
+                  proposal.type === 'update_plan'
+                    ? 'Here’s the updated plan for your review.'
+                    : 'Here’s a proposed plan for the week. Approve to save it.',
+                proposal,
+              },
+            ],
+          }));
+          return;
+        }
+        if (event.type === 'done' && event.result) {
+          clearProgress();
+          const result = event.result;
+          const msgId = genId();
 
-      if (data.status === 'needs_approval') {
-        set((s) => ({
-          threadId: data.thread_id ?? s.threadId,
-          pendingApproval: { ...data.proposal, threadId: data.thread_id ?? s.threadId },
-          messages: [
-            ...s.messages,
-            {
-              id: genId(),
-              role: 'assistant',
-              text:
-                data.proposal.type === 'update_plan'
-                  ? 'Here’s the updated plan for your review.'
-                  : 'Here’s a proposed plan for the week. Approve to save it.',
-              proposal: data.proposal,
-            },
-          ],
-        }));
-        return;
+          // A diet conflict needs its own inline accept/reject card.
+          if (result.log_status === 'conflict' && result.conflict) {
+            const planId = result.plan_id ?? activePlanId;
+            set((s) => ({
+              activePlanId: planId ?? s.activePlanId,
+              pendingConflict: planId
+                ? { ...result.conflict!, planId, messageId: msgId }
+                : s.pendingConflict,
+              messages: [
+                ...s.messages,
+                {
+                  id: msgId,
+                  role: 'assistant',
+                  text: friendlyResultText(result),
+                  result,
+                  conflict: result.conflict,
+                },
+              ],
+            }));
+            return;
+          }
+
+          get().applyResult(result, msgId);
+          return;
+        }
       }
-
-      const result = data.result;
-      const msgId = genId();
-
-      // A diet conflict needs its own inline accept/reject card.
-      if (result.log_status === 'conflict' && result.conflict) {
-        const planId = result.plan_id ?? activePlanId;
-        set((s) => ({
-          activePlanId: planId ?? s.activePlanId,
-          pendingConflict: planId
-            ? { ...result.conflict!, planId, messageId: msgId }
-            : s.pendingConflict,
-          messages: [
-            ...s.messages,
-            {
-              id: msgId,
-              role: 'assistant',
-              text: friendlyResultText(result),
-              result,
-              conflict: result.conflict,
-            },
-          ],
-        }));
-        return;
-      }
-
-      get().applyResult(result, msgId);
     } catch (e: any) {
+      clearProgress();
       set((s) => ({
         messages: [
           ...s.messages,

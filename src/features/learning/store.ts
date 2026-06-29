@@ -119,19 +119,31 @@ type LearningState = {
   deleteMemory: (token: string) => Promise<void>;
 
   digestEnabled: boolean;
+  digestHour: number;
+  digestTimezone: string;
   digestLoading: boolean;
+  digestSaving: boolean;
   fetchTriggers: (token: string) => Promise<void>;
   toggleDigest: (token: string) => Promise<void>;
+  saveTriggerSettings: (
+    token: string,
+    body: { schedule_hour?: number; timezone?: string }
+  ) => Promise<void>;
 };
 
-/**
- * Pulls the daily-digest on/off flag out of the `{ result: Trigger[] }`
- * response from GET /triggers, matching the `learning_digest` action.
- */
-function readDigestEnabled(triggers: Trigger[]): boolean {
-  const digest = triggers.find((t) => t.action_type === 'learning_digest');
-  return !!digest?.enabled;
+/** The daily-digest trigger out of a `{ result: Trigger[] }` GET /triggers response. */
+function findDigest(triggers: Trigger[]): Trigger | undefined {
+  return triggers.find((t) => t.action_type === 'learning_digest');
 }
+
+/** Best-effort device IANA timezone, used as the default before any is saved. */
+const deviceTimezone = (() => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+})();
 
 export const useLearningStore = create<LearningState>((set, get) => ({
   roadmaps: [],
@@ -342,14 +354,23 @@ export const useLearningStore = create<LearningState>((set, get) => ({
   },
 
   digestEnabled: false,
+  digestHour: 8,
+  digestTimezone: deviceTimezone,
   digestLoading: false,
+  digestSaving: false,
   fetchTriggers: async (token) => {
     set({ digestLoading: true });
     try {
       const data = await api.getTriggers(token);
-      set({ digestEnabled: readDigestEnabled(data.result ?? []) });
+      const digest = findDigest(data.result ?? []);
+      set({
+        digestEnabled: !!digest?.enabled,
+        // Keep the current defaults when the server hasn't stored these yet.
+        ...(digest?.schedule_hour != null ? { digestHour: digest.schedule_hour } : {}),
+        ...(digest?.timezone ? { digestTimezone: digest.timezone } : {}),
+      });
     } catch {
-      // Leave digestEnabled untouched if the trigger state can't be loaded.
+      // Leave digest state untouched if the trigger state can't be loaded.
     } finally {
       set({ digestLoading: false });
     }
@@ -357,5 +378,18 @@ export const useLearningStore = create<LearningState>((set, get) => ({
   toggleDigest: async (token) => {
     const data = await api.toggleTrigger(token);
     set({ digestEnabled: data.enabled });
+  },
+  saveTriggerSettings: async (token, body) => {
+    set({ digestSaving: true });
+    try {
+      await api.updateTriggerSettings(token, body);
+      // PATCH succeeded → reflect the saved values locally.
+      set({
+        ...(body.schedule_hour != null ? { digestHour: body.schedule_hour } : {}),
+        ...(body.timezone ? { digestTimezone: body.timezone } : {}),
+      });
+    } finally {
+      set({ digestSaving: false });
+    }
   },
 }));

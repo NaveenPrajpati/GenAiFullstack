@@ -90,6 +90,22 @@ export type QueryResponse =
   | { status: 'done'; result: PlannerResult }
   | { status: 'needs_approval'; thread_id: string; proposal: PlanProposal };
 
+/**
+ * SSE event from POST /meal-planner/query/stream. The planner graph uses
+ * structured output (no text tokens), so streaming surfaces per-node `step`
+ * progress, then a terminal `done` result or `needs_approval` proposal.
+ */
+export interface StreamEvent {
+  /** 'thread' | 'step' | 'done' | 'needs_approval' | 'error' (others ignored). */
+  type: string;
+  node?: string;
+  thread_id?: string;
+  result?: PlannerResult;
+  proposal?: PlanProposal;
+  message?: string;
+  [key: string]: unknown;
+}
+
 /** POST /approve result — on approve, `plan_id` is the saved plan. */
 export interface ApproveResult extends PlannerResult {
   plan_id?: string;
@@ -126,4 +142,6 @@ export interface ChatMessage {
   /** Set once an inline card is resolved, to lock it. */
   resolved?: ApprovalDecision | ConflictDecision;
   isError?: boolean;
+  /** True while a transient progress bubble is streaming step updates. */
+  streaming?: boolean;
 }
