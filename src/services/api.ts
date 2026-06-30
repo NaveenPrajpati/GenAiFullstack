@@ -8,8 +8,11 @@ export const UserApis = {
   me: '/user/me',
   signup: '/user/signup',
   login: '/user/login',
+  logout: '/user/logout',
   forgotPassword: '/user/forgot-password',
   resetPassword: '/user/reset-password',
+  verifyEmail: '/user/verify-email',
+  resendVerification: '/user/resend-verification',
   pushToken: '/user/me/expo-push-token',
 };
 

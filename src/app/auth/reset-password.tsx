@@ -15,8 +15,11 @@ import {
 export default function ResetPasswordScreen() {
   const router = useRouter();
   const { resetPassword } = useAuth();
-  // Reset token arrives via the email deep link, e.g. /auth/reset-password?token=abc
-  const { token: resetToken } = useLocalSearchParams<{ token?: string }>();
+  // Email is carried over from forgot-password; the 6-digit code arrives by
+  // email. e.g. /auth/reset-password?email=you@example.com
+  const { email: emailParam } = useLocalSearchParams<{ email?: string }>();
+  const [email, setEmail] = useState(emailParam ?? '');
+  const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
@@ -24,8 +27,8 @@ export default function ResetPasswordScreen() {
   const [done, setDone] = useState(false);
 
   async function handleReset() {
-    if (!resetToken) {
-      setError('Missing or invalid reset link');
+    if (!email.trim() || code.trim().length !== 6) {
+      setError('Enter your email and the 6-digit code');
       return;
     }
     if (!password || !confirm) {
@@ -43,7 +46,7 @@ export default function ResetPasswordScreen() {
     setLoading(true);
     setError('');
     try {
-      await resetPassword(resetToken, password);
+      await resetPassword(email.trim(), code.trim(), password);
       setDone(true);
     } catch (e: any) {
       setError(e?.response?.data?.detail || 'Failed to reset password');
@@ -92,6 +95,32 @@ export default function ResetPasswordScreen() {
                 <Text className="text-sm text-red-600">{error}</Text>
               </View>
             ) : null}
+
+            <View className="mb-4">
+              <Text className="mb-1.5 text-sm font-medium text-gray-700">Email</Text>
+              <TextInput
+                className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-gray-900"
+                placeholder="you@example.com"
+                placeholderTextColor="#9ca3af"
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={email}
+                onChangeText={setEmail}
+              />
+            </View>
+
+            <View className="mb-4">
+              <Text className="mb-1.5 text-sm font-medium text-gray-700">Reset code</Text>
+              <TextInput
+                className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-center text-lg tracking-[8px] text-gray-900"
+                placeholder="000000"
+                placeholderTextColor="#9ca3af"
+                keyboardType="number-pad"
+                maxLength={6}
+                value={code}
+                onChangeText={setCode}
+              />
+            </View>
 
             <View className="mb-4">
               <Text className="mb-1.5 text-sm font-medium text-gray-700">New password</Text>

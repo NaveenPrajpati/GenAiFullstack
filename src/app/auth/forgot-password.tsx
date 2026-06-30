@@ -30,8 +30,10 @@ export default function ForgotPasswordScreen() {
     try {
       await forgotPassword(email.trim());
       setSent(true);
+      // Hand off to the reset screen where the user enters the emailed code.
+      router.push(`/auth/reset-password?email=${encodeURIComponent(email.trim())}`);
     } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Failed to send reset link');
+      setError(e?.response?.data?.detail || 'Failed to send reset code');
     } finally {
       setLoading(false);
     }

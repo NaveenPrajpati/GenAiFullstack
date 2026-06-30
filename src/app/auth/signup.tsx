@@ -39,6 +39,8 @@ export default function SignupScreen() {
     setError('');
     try {
       await signup(name.trim(), email.trim(), password);
+      // Account is created and signed in; prompt to verify the email (optional).
+      router.replace(`/auth/verify-email?email=${encodeURIComponent(email.trim())}`);
     } catch (e: any) {
       setError(e?.response?.data?.detail || 'Failed to create account');
     } finally {

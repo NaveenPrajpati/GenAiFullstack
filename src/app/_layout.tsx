@@ -20,15 +20,17 @@ function AppDrawer() {
   }, []);
 
   const inAuth = segments[0] === 'auth';
-  // convert-guest is an authenticated auth route: a logged-in guest visits it to
-  // upgrade, so it must be exempt from the "token → leave auth" redirect.
-  const onConvertGuest = inAuth && segments.includes('convert-guest');
+  // Some auth routes are visited *while authenticated*: a logged-in guest upgrades
+  // via convert-guest, and a freshly-signed-up user may verify their email. Both
+  // must be exempt from the "token → leave auth" redirect.
+  const onAuthedAuthRoute =
+    inAuth && (segments.includes('convert-guest') || segments.includes('verify-email'));
 
   useEffect(() => {
     if (!mounted || !isReady) return;
     if (!token && !inAuth) {
       router.replace('/auth/login');
-    } else if (token && inAuth && !onConvertGuest) {
+    } else if (token && inAuth && !onAuthedAuthRoute) {
       router.replace('/');
     }
   }, [token, segments, mounted, isReady]);

@@ -12,6 +12,7 @@ export interface User {
   role: string;
   description: string | null;
   is_guest: boolean;
+  email_verified?: boolean;
   expires_at: string | null;
 }
 
@@ -24,7 +25,9 @@ interface AuthContextType {
   createGuest: () => Promise<void>;
   convertGuest: (email: string, password: string) => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
-  resetPassword: (token: string, password: string) => Promise<void>;
+  resetPassword: (email: string, code: string, newPassword: string) => Promise<void>;
+  verifyEmail: (email: string, code: string) => Promise<void>;
+  resendVerification: (email: string) => Promise<void>;
   fetchMe: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -101,8 +104,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await apiClient().post(UserApis.forgotPassword, { email });
   }, []);
 
-  const resetPassword = useCallback(async (resetToken: string, password: string) => {
-    await apiClient().post(UserApis.resetPassword, { token: resetToken, password });
+  const resetPassword = useCallback(
+    async (email: string, code: string, newPassword: string) => {
+      // Backend resets by emailed 6-digit code, returning a fresh session.
+      const res = await apiClient().post(UserApis.resetPassword, {
+        email,
+        code,
+        new_password: newPassword,
+      });
+      await saveSession(res.data.token, res.data.user);
+    },
+    []
+  );
+
+  const verifyEmail = useCallback(
+    async (email: string, code: string) => {
+      const res = await apiClient(token).post(UserApis.verifyEmail, { email, code });
+      // Reflect the new verified status if this is the signed-in account.
+      if (token && res.data?.id) {
+        setUser(res.data);
+        await AsyncStorage.setItem(USER_KEY, JSON.stringify(res.data));
+      }
+    },
+    [token]
+  );
+
+  const resendVerification = useCallback(async (email: string) => {
+    await apiClient().post(UserApis.resendVerification, { email });
   }, []);
 
   const fetchMe = useCallback(async () => {
@@ -113,10 +141,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [token]);
 
   const logout = useCallback(async () => {
+    // Best-effort server-side revocation (invalidates all tokens); always clear
+    // local session even if the call fails or there's no network.
+    try {
+      if (token) await apiClient(token).post(UserApis.logout);
+    } catch {
+      // ignore — local sign-out below is what matters to the user
+    }
     await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
     setToken(null);
     setUser(null);
-  }, []);
+  }, [token]);
 
   return (
     <AuthContext.Provider
@@ -130,6 +165,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         convertGuest,
         forgotPassword,
         resetPassword,
+        verifyEmail,
+        resendVerification,
         fetchMe,
         logout,
       }}>
