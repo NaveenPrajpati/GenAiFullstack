@@ -1,6 +1,6 @@
 export const BASE_URL = __DEV__
   ? 'http://192.168.0.151:8000/api'
-  : 'https://genai-back.vercel.app/api';
+  : 'https://aiengineer.duckdns.org/api';
 
 export const UserApis = {
   guest: '/user/guest',
@@ -9,6 +9,7 @@ export const UserApis = {
   signup: '/user/signup',
   login: '/user/login',
   logout: '/user/logout',
+  refresh: '/users/refresh',
   forgotPassword: '/user/forgot-password',
   resetPassword: '/user/reset-password',
   verifyEmail: '/user/verify-email',

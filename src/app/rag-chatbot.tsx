@@ -1,4 +1,5 @@
 import { useAuth } from '@/context/AuthContext';
+import { RagFeaturesModal } from '@/features/rag/RagFeaturesModal';
 import * as DocumentPicker from 'expo-document-picker';
 import { DocumentPickerAsset } from 'expo-document-picker';
 import { TrashIcon } from 'lucide-react-native';
@@ -39,6 +40,7 @@ export default function RagChatbotScreen() {
   const [chatsLoading, setChatsLoading] = useState(true);
   const { user, logout } = useAuth();
   const [showSidebar, setShowSidebar] = useState(false);
+  const [showFeatures, setShowFeatures] = useState(false);
 
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
@@ -194,6 +196,13 @@ export default function RagChatbotScreen() {
             accumulated += event.token;
             setLoading(false);
             setMessages([...updated, { role: 'assistant', content: accumulated }]);
+          } else if (event.type === 'error') {
+            const errorMessage = event.message ?? 'Something went wrong. Please try again.';
+            setLoading(false);
+            setMessages([...updated, { role: 'assistant', content: errorMessage }]);
+            Toast.show({ type: 'error', text1: 'Unable to answer', text2: errorMessage });
+            await reader.cancel();
+            return;
           }
         }
       }
@@ -249,7 +258,15 @@ export default function RagChatbotScreen() {
       style={isWide ? { width: 300, borderRightWidth: 1 } : { flex: 1 }}>
       {/* Upload section */}
       <View className="border-b border-gray-100 px-5 pt-6 pb-5">
-        <Text className="text-xl font-bold text-gray-900">RAG Chatbot</Text>
+        <View className="flex-row items-center justify-between">
+          <Text className="text-xl font-bold text-gray-900">RAG Chatbot</Text>
+          <TouchableOpacity
+            onPress={() => setShowFeatures(true)}
+            className="flex-row items-center gap-1 rounded-full bg-blue-50 px-3 py-1.5"
+            activeOpacity={0.8}>
+            <Text className="text-xs font-semibold text-blue-700">ⓘ Features</Text>
+          </TouchableOpacity>
+        </View>
         <Text className="mt-1 text-xs text-gray-500">
           Upload a document and ask questions about it
         </Text>
@@ -411,6 +428,12 @@ export default function RagChatbotScreen() {
               </Text>
             </View>
           )}
+          <TouchableOpacity
+            onPress={() => setShowFeatures(true)}
+            className="ml-auto rounded-full bg-blue-50 px-3 py-1.5"
+            activeOpacity={0.8}>
+            <Text className="text-xs font-semibold text-blue-700">ⓘ Features</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -508,6 +531,7 @@ export default function RagChatbotScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       style={{ flex: 1 }}>
+      <RagFeaturesModal visible={showFeatures} onClose={() => setShowFeatures(false)} />
       {isWide ? (
         // Web / tablet: side-by-side layout
         <View className="flex-1 flex-row bg-gray-50">
