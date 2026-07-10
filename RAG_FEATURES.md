@@ -89,12 +89,13 @@ Each event is a line `data: {json}\n\n`. Handle these `type`s in order of arriva
 
 | `type` | Payload | What the UI should do |
 |---|---|---|
+| `stage` | `{ name, ms?, info?, skipped? }` | Real server-side pipeline telemetry, one per stage in order: `embed → cache → retrieve → rerank → gate → stream → persist`. `ms` is the measured server time; `info` is a short annotation (e.g. `"miss"`, `"25 candidates"`, `"answerable"`); `skipped:true` means the stage didn't run (e.g. retrieve/rerank/gate on a cache hit). Drives the pipeline card. |
 | `sources` | `{ sources: [...], cached?: true }` | Render the source list (so citations `[n]` resolve as tokens arrive). `cached:true` = served from cache. |
 | `token` | `{ token: "text " }` | Append to the streaming answer bubble. |
 | `citations` | `{ cited: [2, 4] }` | The source numbers the answer actually used — highlight/keep only these if desired. |
 | `evaluation` | `{ evaluation: {...} }` | Only if `evaluate:true`. Optional quality panel. |
 | `error` | `{ message: "..." }` | Show the message (e.g. *"No relevant documents found. Please upload documents first."*). Stop. |
-| `done` | `{ chat_id: "...", grounded?: bool, cached?: bool }` | Finalize. Save `chat_id` for the next turn. |
+| `done` | `{ chat_id, grounded?, cached?, timings: {stage: ms}, total_ms }` | Finalize. Save `chat_id` for the next turn. `timings`/`total_ms` are the server-side summary — client wall-time will be higher (it includes network). |
 
 **Refusal (the "won't hallucinate" case):** when the documents can't support an answer, the
 stream emits `sources` with an empty list, a single `token` with the refusal message, then
