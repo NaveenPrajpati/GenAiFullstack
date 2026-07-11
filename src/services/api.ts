@@ -19,7 +19,7 @@ export const UserApis = {
 
 export const RagApis = {
   ingestFile: '/rag/ingest',
-  getallFiles: '/rag/get-files',
+  getallIngestions: '/rag/get-ingestions',
   deleteFile: (id: string) => '/rag/ingest/'.concat(id),
   getallChats: '/chat',
   getallMessages: (id: string) => '/chat/'.concat(id, '/messages'),

@@ -4,12 +4,12 @@ import { RagInsightsPanel } from '@/features/rag/RagInsightsPanel';
 import { RagPipelineCard } from '@/features/rag/RagPipelineCard';
 import {
   ChatMessage,
+  initialPipeline,
   PIPELINE_STEPS,
   PipelineState,
   QueryMeta,
   RagEvaluation,
   RagSource,
-  initialPipeline,
 } from '@/features/rag/ragTypes';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
@@ -149,7 +149,7 @@ export default function RagChatbotScreen() {
   async function getAllIngestedFiles() {
     setIngestionsLoading(true);
     http
-      .get(RagApis.getallFiles)
+      .get(RagApis.getallIngestions)
       .then((res) => {
         setIngestions(res.data.data);
       })
@@ -177,6 +177,8 @@ export default function RagChatbotScreen() {
       getAllChats();
     });
   }
+
+  const data = new FormData();
 
   useEffect(() => {
     getAllIngestedFiles();
@@ -381,7 +383,11 @@ export default function RagChatbotScreen() {
   const handlePick = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf', 'text/plain'],
+        type: [
+          'application/pdf',
+          'text/plain',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ],
         copyToCacheDirectory: true,
         multiple: false,
       });
@@ -556,7 +562,7 @@ export default function RagChatbotScreen() {
             <PaperclipIcon size={14} color={VIOLET} />
           )}
           <Text className="text-xs font-semibold text-violet-700">
-            {isUploading ? 'Uploading…' : 'Upload PDF / Text'}
+            {isUploading ? 'Uploading…' : 'Upload PDF / Text / Docx'}
           </Text>
         </TouchableOpacity>
 
