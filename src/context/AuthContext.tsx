@@ -1,4 +1,5 @@
 import { BASE_URL, UserApis } from '@/services/api';
+import { setOnSessionExpired } from '@/services/http';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
@@ -71,6 +72,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
     init();
+  }, []);
+
+  // When the http layer's token refresh fails (dead refresh token), it has
+  // already cleared storage — mirror that by dropping in-memory state so the
+  // navigator redirects to login.
+  useEffect(() => {
+    setOnSessionExpired(() => {
+      setToken(null);
+      setRefreshToken(null);
+      setUser(null);
+    });
+    return () => setOnSessionExpired(null);
   }, []);
 
   const saveSession = async (t: string, u: User, refresh?: string | null) => {

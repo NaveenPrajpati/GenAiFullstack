@@ -51,7 +51,7 @@ import {
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { BASE_URL, RagApis } from '../services/api';
-import { getAuthToken, http } from '../services/http';
+import { authedFetch, http } from '../services/http';
 
 const VIOLET = '#7c3aed';
 const VIEW_MODE_KEY = 'rag_view_mode'; // 'dev' | 'user' — Developer view is the default
@@ -234,10 +234,8 @@ export default function RagChatbotScreen() {
 
       const query = new URLSearchParams({ page: '2', isAdming: 'false' }).toString();
 
-      const authToken = await getAuthToken();
-      const response = await fetch(`${BASE_URL}/rag/ingest/${action}?${query}`, {
+      const response = await authedFetch(`${BASE_URL}/rag/ingest/${action}?${query}`, {
         method: 'POST',
-        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
         body: formData,
       });
 
@@ -276,13 +274,9 @@ export default function RagChatbotScreen() {
     let streamSources: RagSource[] = [];
 
     try {
-      const authToken = await getAuthToken();
-      const response = await fetch(`${BASE_URL}/rag/query/stream`, {
+      const response = await authedFetch(`${BASE_URL}/rag/query/stream`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           question: userMessage,
           // Eval scores are a developer-view feature — don't spend judge LLM
@@ -387,6 +381,11 @@ export default function RagChatbotScreen() {
           'application/pdf',
           'text/plain',
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'image/jpeg',
+          'image/png',
+          'image/webp',
+          'image/bmp',
+          'image/tiff',
         ],
         copyToCacheDirectory: true,
         multiple: false,
@@ -562,7 +561,7 @@ export default function RagChatbotScreen() {
             <PaperclipIcon size={14} color={VIOLET} />
           )}
           <Text className="text-xs font-semibold text-violet-700">
-            {isUploading ? 'Uploading…' : 'Upload PDF / Text / Docx'}
+            {isUploading ? 'Uploading…' : 'Upload PDF / Text / Docx / Image'}
           </Text>
         </TouchableOpacity>
 
