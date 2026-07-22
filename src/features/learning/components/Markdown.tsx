@@ -49,11 +49,15 @@ const chatMarkdownStyle: MarkdownStyle = {
 };
 
 export function ChatMarkdown({ markdown, streaming }: { markdown: string; streaming?: boolean }) {
+  // `streamingAnimation` is a native-only affordance. The web renderer forwards
+  // unknown props straight onto its <div>, so passing it there triggers React's
+  // "unrecognized DOM attribute" warning — omit it off native.
+  const nativeOnlyProps = Platform.OS === 'web' ? {} : { streamingAnimation: !!streaming };
   return (
     <EnrichedMarkdownText
       markdown={markdown}
       markdownStyle={chatMarkdownStyle}
-      streamingAnimation={!!streaming}
+      {...nativeOnlyProps}
       allowTrailingMargin={false}
       selectable
       onLinkPress={(e) => Linking.openURL(e.url).catch(() => {})}

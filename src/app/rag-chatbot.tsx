@@ -62,6 +62,9 @@ export default function RagChatbotScreen() {
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [streaming, setStreaming] = useState(false);
+  // Seconds elapsed since the current query started, shown in the "Thinking…"
+  // indicator so a slow first (cold) response reads as progress, not a hang.
+  const [thinkingSeconds, setThinkingSeconds] = useState(0);
   const [uploadStatus, setUploadStatus] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
@@ -188,6 +191,16 @@ export default function RagChatbotScreen() {
   useEffect(() => {
     if (asset) handleUpload(asset, 'file');
   }, [asset]);
+
+  useEffect(() => {
+    if (!loading) {
+      setThinkingSeconds(0);
+      return;
+    }
+    const start = Date.now();
+    const id = setInterval(() => setThinkingSeconds(Math.floor((Date.now() - start) / 1000)), 500);
+    return () => clearInterval(id);
+  }, [loading]);
 
   const startNewQuery = () => {
     setSelectedChat(null);
@@ -374,6 +387,17 @@ export default function RagChatbotScreen() {
     }
   };
 
+  // Web: send on Enter, newline on Shift+Enter. The composer is `multiline`, and
+  // react-native-web only fires onSubmitEditing for multiline inputs when the
+  // legacy `blurOnSubmit` prop is set — so we intercept the keydown ourselves.
+  const handleComposerKeyPress = (e: any) => {
+    if (Platform.OS !== 'web') return;
+    if (e?.key === 'Enter' && !e?.shiftKey && !e?.nativeEvent?.isComposing) {
+      e.preventDefault();
+      handleSendStream();
+    }
+  };
+
   const handlePick = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -475,7 +499,6 @@ export default function RagChatbotScreen() {
     soon?: boolean;
   };
   const navItems: NavItem[] = [
-    { label: 'Home', icon: HomeIcon, onPress: () => router.push('/') },
     { label: 'Chat', icon: MessageSquareIcon, active: true },
     // Platform sections are developer-view concerns; hide them in Simple view.
     ...(devMode
@@ -570,7 +593,7 @@ export default function RagChatbotScreen() {
           <TextInput
             onChangeText={setInputUrl}
             placeholder="Paste a URL"
-            className="flex-1 px-1 py-1.5 text-xs text-gray-800"
+            className="flex-1 px-1 py-1.5 text-xs text-gray-800 outline-0"
             placeholderTextColor="#9ca3af"
             keyboardType="url"
             autoCapitalize="none"
@@ -870,9 +893,18 @@ export default function RagChatbotScreen() {
         )}
 
         {loading && (
-          <View className="mb-4 flex-row items-center gap-2 self-start rounded-2xl border border-gray-200 bg-white px-4 py-3">
-            <ActivityIndicator size="small" color={VIOLET} />
-            <Text className="text-sm text-gray-500">Thinking…</Text>
+          <View className="mb-4 self-start rounded-2xl border border-gray-200 bg-white px-4 py-3">
+            <View className="flex-row items-center gap-2">
+              <ActivityIndicator size="small" color={VIOLET} />
+              <Text className="text-sm text-gray-500">
+                Thinking…{thinkingSeconds > 0 ? ` ${thinkingSeconds}s` : ''}
+              </Text>
+            </View>
+            {thinkingSeconds >= 6 && (
+              <Text className="mt-1 text-[11px] text-gray-400">
+                The first query warms up the model — this can take ~20s.
+              </Text>
+            )}
           </View>
         )}
 
@@ -884,7 +916,7 @@ export default function RagChatbotScreen() {
         <View style={{ maxWidth: 860, width: '100%', alignSelf: 'center' }}>
           <View className="rounded-2xl border border-gray-200 bg-gray-50 px-3 pt-2 pb-2">
             <TextInput
-              className="max-h-24 px-1 py-2 text-sm text-gray-800"
+              className="max-h-24 px-1 py-2 text-sm text-gray-800 outline-0"
               placeholder={messages.length ? 'Ask a follow-up question…' : 'Ask a question…'}
               placeholderTextColor="#9ca3af"
               value={inputText}
@@ -892,6 +924,7 @@ export default function RagChatbotScreen() {
               multiline
               returnKeyType="send"
               onSubmitEditing={handleSendStream}
+              onKeyPress={handleComposerKeyPress}
               submitBehavior="blurAndSubmit"
             />
             <View className="mt-1 flex-row items-center gap-3">
