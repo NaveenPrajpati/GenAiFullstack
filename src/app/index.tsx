@@ -13,53 +13,80 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-const APPS = [
-  {
-    href: '/rag-chatbot',
-    emoji: '🤖',
-    title: 'RAG Assistant',
-    tag: 'Ask your documents',
-    desc: 'Upload PDFs, Word docs, scanned images, or links, then ask questions in plain English. Answers stream in with inline citations, a live retrieval pipeline, and grounding scores — so you always see where the answer came from.',
-    iconBg: 'bg-violet-100',
-    btnBg: 'bg-violet-600',
-    bar: 'bg-violet-500',
-  },
+/**
+ * The supervisor sits above the three agents rather than beside them, so it gets
+ * a featured card instead of a grid slot — the grid below is the specialist
+ * tools you can still open directly.
+ */
+const FEATURED = {
+  href: '/assistant',
+  emoji: '✨',
+  title: 'Assistant',
+  tag: 'One chat, every skill',
+  desc: 'Ask for anything and the right specialist picks it up — a study roadmap, your task list, or a week of meals. Some requests use more than one, and you approve anything that changes your data before it happens.',
+  skills: [
+    { emoji: '🎓', label: 'Learning coach' },
+    { emoji: '🪄', label: 'Personal assistant' },
+    { emoji: '🥗', label: 'Meal planner' },
+  ],
+} as const;
 
+/**
+ * The RAG chatbot is its own product, not one of the Assistant's skills: it has
+ * its own data (documents you upload) and its own interaction model. It gets a
+ * peer card rather than a slot in the skills grid.
+ */
+const RAG = {
+  href: '/rag-chatbot',
+  emoji: '🤖',
+  title: 'RAG Chatbot',
+  tag: 'Chat with your documents',
+  desc: 'Upload PDFs, Word docs, scanned images, or links, then ask questions in plain English. Answers stream in with inline citations, a live retrieval pipeline, and grounding scores — so you always see where the answer came from.',
+  iconBg: 'bg-violet-100',
+  btnBg: 'bg-violet-600',
+  bar: 'bg-violet-500',
+} as const;
+
+/** The three agents the Assistant routes to — each also opens on its own. */
+const SKILLS = [
   {
     href: '/learning',
-    emoji: '📚',
-    title: 'Learning Planner',
+    emoji: '🎓',
+    title: 'Learning',
     tag: 'Study smarter',
-    desc: 'Transform long articles, reports, and meeting notes into clear, concise summaries.',
+    desc: 'Turn any subject into a sequenced roadmap with prerequisites and hour estimates, get concepts explained, take quizzes, and track what you have covered.',
     iconBg: 'bg-amber-100',
     btnBg: 'bg-amber-600',
     bar: 'bg-amber-500',
   },
   {
-    href: '/meal-planner',
-    emoji: '📝',
-    title: 'Meal Plannner',
-    tag: 'Plan your week',
-    desc: 'Transform long articles, reports, and meeting notes into clear, concise summaries.',
-    iconBg: 'bg-emerald-100',
-    btnBg: 'bg-emerald-600',
-    bar: 'bg-emerald-500',
-  },
-  {
     href: '/personal-assistant',
-    emoji: '✉️',
+    emoji: '🪄',
     title: 'Personal Assistant',
-    tag: 'Write faster',
-    desc: 'Draft replies, summarize threads, fix grammar, or improve your email writing style.',
+    tag: 'Stay on top of things',
+    desc: 'Capture tasks and reminders in plain language, see what is overdue or due today, break big goals into steps, and keep notes it remembers for you.',
     iconBg: 'bg-sky-100',
     btnBg: 'bg-sky-600',
     bar: 'bg-sky-500',
+  },
+  {
+    href: '/meal-planner',
+    emoji: '🥗',
+    title: 'Meal Planner',
+    tag: 'Plan your week',
+    desc: 'Generate a week of meals around your diet, allergies and dislikes, log what you actually ate, and turn the plan into a consolidated grocery list.',
+    iconBg: 'bg-emerald-100',
+    btnBg: 'bg-emerald-600',
+    bar: 'bg-emerald-500',
   },
 ] as const;
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    // `shouldShowAlert` split into banner + list in expo-notifications SDK 53;
+    // both true is the equivalent of the old single flag.
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
@@ -139,7 +166,7 @@ export default function HomeScreen() {
           <View style={{ width: '100%', maxWidth: CONTENT_MAX_WIDTH }}>
             <View className="mb-3 flex-row items-center gap-2 self-start rounded-full bg-violet-50 px-3 py-1">
               <Text className="text-xs font-semibold text-violet-700">
-                ✨ {APPS.length} AI tools
+                ✨ {SKILLS.length + 2} AI tools
               </Text>
             </View>
             <Text className={`font-bold text-gray-900 ${isGrid ? 'text-4xl' : 'text-3xl'}`}>
@@ -147,15 +174,115 @@ export default function HomeScreen() {
             </Text>
             <Text
               className={`mt-2 leading-relaxed text-gray-600 ${isGrid ? 'max-w-xl text-base' : 'text-base'}`}>
-              A collection of AI-powered tools to boost your productivity — from a
-              retrieval-augmented assistant that answers questions straight from your documents, to
-              writing and planning helpers. Pick a tool below to get started.
+              Two ways in: chat with your own documents, or use the Assistant — one conversation
+              that routes to a learning coach, a task manager, and a meal planner, and asks before
+              it changes anything.
             </Text>
           </View>
         </View>
 
-        {/* App grid */}
+        {/* RAG — its own product, so it leads and stands apart from the skills. */}
+        <View className="items-center px-4 pt-6">
+          <View
+            className="w-full overflow-hidden rounded-2xl border border-gray-100 bg-white"
+            style={{
+              maxWidth: CONTENT_MAX_WIDTH,
+              shadowColor: '#000',
+              shadowOpacity: 0.05,
+              shadowRadius: 6,
+              elevation: 2,
+            }}>
+            <View className={`h-1.5 ${RAG.bar}`} />
+            <View className={isGrid ? 'p-6' : 'p-5'}>
+              <View className="flex-row items-start gap-4">
+                <View className={`h-12 w-12 ${RAG.iconBg} items-center justify-center rounded-xl`}>
+                  <Text className="text-2xl">{RAG.emoji}</Text>
+                </View>
+                <View className="flex-1">
+                  <Text className="text-lg font-semibold text-gray-900">{RAG.title}</Text>
+                  <Text className="mb-2 text-xs font-medium text-gray-400">{RAG.tag}</Text>
+                  <Text
+                    className={`mb-4 leading-relaxed text-gray-600 ${isGrid ? 'max-w-2xl text-sm' : 'text-sm'}`}>
+                    {RAG.desc}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => router.navigate(RAG.href)}
+                    className={`${RAG.btnBg} self-start rounded-lg px-4 py-2.5`}
+                    activeOpacity={0.8}
+                    accessibilityRole="button">
+                    <Text className="text-sm font-medium text-white">Launch →</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Featured: the unified assistant */}
+        <View className="items-center px-4 pt-6">
+          <View
+            className="w-full overflow-hidden rounded-2xl bg-indigo-600"
+            style={{
+              maxWidth: CONTENT_MAX_WIDTH,
+              shadowColor: '#4f46e5',
+              shadowOpacity: 0.25,
+              shadowRadius: 12,
+              shadowOffset: { width: 0, height: 4 },
+              elevation: 4,
+            }}>
+            <View className={isGrid ? 'p-8' : 'p-6'}>
+              <View className="flex-row items-center gap-2">
+                <View className="rounded-full bg-white/15 px-2.5 py-1">
+                  <Text className="text-xs font-semibold text-white">New</Text>
+                </View>
+                <Text className="text-xs font-medium text-indigo-200">{FEATURED.tag}</Text>
+              </View>
+
+              <View className="mt-3 flex-row items-center gap-3">
+                <View className="h-12 w-12 items-center justify-center rounded-xl bg-white/15">
+                  <Text className="text-2xl">{FEATURED.emoji}</Text>
+                </View>
+                <Text className={`font-bold text-white ${isGrid ? 'text-3xl' : 'text-2xl'}`}>
+                  {FEATURED.title}
+                </Text>
+              </View>
+
+              <Text
+                className={`mt-3 leading-relaxed text-indigo-100 ${isGrid ? 'max-w-2xl text-base' : 'text-sm'}`}>
+                {FEATURED.desc}
+              </Text>
+
+              <View className="mt-4 flex-row flex-wrap gap-2">
+                {FEATURED.skills.map((s) => (
+                  <View
+                    key={s.label}
+                    className="flex-row items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5">
+                    <Text className="text-xs">{s.emoji}</Text>
+                    <Text className="text-xs font-medium text-white">{s.label}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <TouchableOpacity
+                onPress={() => router.navigate(FEATURED.href)}
+                className="mt-5 self-start rounded-lg bg-white px-5 py-2.5"
+                activeOpacity={0.85}
+                accessibilityRole="button">
+                <Text className="text-sm font-semibold text-indigo-700">Start chatting →</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        {/* The Assistant's skills, which also stand alone. */}
         <View className="items-center px-4 py-6">
+          <View style={{ width: '100%', maxWidth: CONTENT_MAX_WIDTH }}>
+            <Text className="text-sm font-semibold text-gray-700">Assistant skills</Text>
+            <Text className="mt-0.5 mb-3 text-xs text-gray-400">
+              The Assistant brings these in for you — or open one directly to browse everything it
+              has stored.
+            </Text>
+          </View>
           <View
             style={{
               width: '100%',
@@ -164,7 +291,7 @@ export default function HomeScreen() {
               flexWrap: 'wrap',
               gap: CARD_GAP,
             }}>
-            {APPS.map((app) =>
+            {SKILLS.map((app) =>
               isGrid ? (
                 <View
                   key={app.href}

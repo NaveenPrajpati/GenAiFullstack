@@ -5,19 +5,81 @@ import * as Updates from 'expo-updates';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Text, TouchableOpacity, View } from 'react-native';
 
-const NAV_ITEMS = [
-  { href: '/', emoji: '🏠', label: 'Home', desc: 'Dashboard' },
-  { href: '/rag-chatbot', emoji: '🤖', label: 'RAG Chatbot', desc: 'Document Q&A' },
-  { href: '/learning', emoji: '🎓', label: 'Learning', desc: 'Roadmaps & AI tutor' },
-  {
-    href: '/personal-assistant',
-    emoji: '🪄',
-    label: 'Personal Assistant',
-    desc: 'Tasks, agenda & notes',
-  },
+interface NavItem {
+  href: string;
+  emoji: string;
+  label: string;
+  desc: string;
+  /** The Assistant's skills. Nested to show they belong to it — each is still
+   *  its own route, so it stays usable on its own. */
+  children?: NavItem[];
+}
 
-  { href: '/meal-planner', emoji: '📝', label: 'Meal Planner', desc: 'Plan your weekly diet' },
-] as const;
+/**
+ * Two top-level products: the RAG chatbot (your documents) and the Assistant
+ * (the supervisor over three agents). RAG is deliberately a peer, not a skill —
+ * it has its own data and interaction model.
+ *
+ * Home isn't listed: tapping the "AI Toolkit" header goes there.
+ */
+const NAV_ITEMS: NavItem[] = [
+  { href: '/rag-chatbot', emoji: '🤖', label: 'RAG Chatbot', desc: 'Chat with your documents' },
+  {
+    href: '/assistant',
+    emoji: '✨',
+    label: 'Assistant',
+    desc: 'One chat, every skill',
+    children: [
+      { href: '/learning', emoji: '🎓', label: 'Learning', desc: 'Roadmaps & AI tutor' },
+      {
+        href: '/personal-assistant',
+        emoji: '🪄',
+        label: 'Personal Assistant',
+        desc: 'Tasks, agenda & notes',
+      },
+      { href: '/meal-planner', emoji: '🥗', label: 'Meal Planner', desc: 'Plan your weekly diet' },
+    ],
+  },
+];
+
+function NavRow({
+  item,
+  active,
+  nested,
+  onPress,
+}: {
+  item: NavItem;
+  active: boolean;
+  nested?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      className={`my-0.5 flex-row items-center gap-3 rounded-lg px-3 ${
+        nested ? 'py-2' : 'py-2.5'
+      } ${active ? 'bg-indigo-600' : ''}`}
+      activeOpacity={0.7}
+      accessibilityRole="button">
+      <View
+        className={`${nested ? 'h-7 w-7' : 'h-8 w-8'} items-center justify-center rounded-lg ${
+          active ? 'bg-indigo-500' : 'bg-gray-800'
+        }`}>
+        <Text className={nested ? 'text-sm' : 'text-base'}>{item.emoji}</Text>
+      </View>
+      <View className="flex-1">
+        <Text
+          className={`${nested ? 'text-[13px]' : 'text-sm'} font-medium ${
+            active ? 'text-white' : 'text-gray-300'
+          }`}>
+          {item.label}
+        </Text>
+        <Text className={`${nested ? 'text-[10px]' : 'text-xs'} text-gray-500`}>{item.desc}</Text>
+      </View>
+      {active && <View className="h-1.5 w-1.5 rounded-full bg-indigo-400" />}
+    </TouchableOpacity>
+  );
+}
 
 function formatExpiry(expiresAt: string | null): string {
   if (!expiresAt) return '';
@@ -94,18 +156,26 @@ export default function DrawerContent(props: DrawerContentComponentProps) {
 
   return (
     <View className="flex-1 bg-gray-800" style={{ paddingTop: Platform.OS !== 'web' ? 40 : 0 }}>
-      {/* Header */}
-      <View className="border-b border-gray-700 px-5 py-4">
+      {/* Header — doubles as the Home link, so Home needs no nav row. */}
+      <TouchableOpacity
+        onPress={() => handleNavigate('/')}
+        className={`border-b border-gray-700 px-5 py-4 ${isActive('/') ? 'bg-gray-700/40' : ''}`}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Go to home">
         <View className="flex-row items-center gap-3">
           <View className="h-9 w-9 items-center justify-center rounded-lg bg-indigo-600">
             <Text className="text-sm font-bold text-white">AI</Text>
           </View>
-          <View>
+          <View className="flex-1">
             <Text className="text-base font-semibold text-white">AI Toolkit</Text>
-            <Text className="text-xs text-gray-400">Full Stack Apps</Text>
+            <Text className="text-xs text-gray-400">
+              {isActive('/') ? 'Home' : 'Tap for home'}
+            </Text>
           </View>
+          {isActive('/') && <View className="h-1.5 w-1.5 rounded-full bg-indigo-400" />}
         </View>
-      </View>
+      </TouchableOpacity>
 
       {/* User profile section */}
       {user && (
@@ -151,28 +221,30 @@ export default function DrawerContent(props: DrawerContentComponentProps) {
         // {...props}
         contentContainerStyle={{ flexGrow: 1 }}
         style={{ backgroundColor: 'transparent' }}>
-        {NAV_ITEMS.map((item) => {
-          const active = isActive(item.href);
-          return (
-            <TouchableOpacity
-              key={item.href}
+        {NAV_ITEMS.map((item) => (
+          <View key={item.href}>
+            <NavRow
+              item={item}
+              active={isActive(item.href)}
               onPress={() => handleNavigate(item.href)}
-              className={`my-0.5 flex-row items-center gap-3 rounded-lg px-3 py-2.5 ${active ? 'bg-indigo-600' : ''}`}
-              activeOpacity={0.7}>
-              <View
-                className={`h-8 w-8 items-center justify-center rounded-lg ${active ? 'bg-indigo-500' : 'bg-gray-800'}`}>
-                <Text className="text-base">{item.emoji}</Text>
+            />
+            {/* Skills, indented under the Assistant they belong to. The rule on
+                the left ties them to it; they remain individually tappable. */}
+            {!!item.children?.length && (
+              <View className="mb-1 ml-7 border-l border-gray-700 pl-2">
+                {item.children.map((child) => (
+                  <NavRow
+                    key={child.href}
+                    item={child}
+                    nested
+                    active={isActive(child.href)}
+                    onPress={() => handleNavigate(child.href)}
+                  />
+                ))}
               </View>
-              <View className="flex-1">
-                <Text className={`text-sm font-medium ${active ? 'text-white' : 'text-gray-300'}`}>
-                  {item.label}
-                </Text>
-                <Text className="text-xs text-gray-500">{item.desc}</Text>
-              </View>
-              {active && <View className="h-1.5 w-1.5 rounded-full bg-indigo-400" />}
-            </TouchableOpacity>
-          );
-        })}
+            )}
+          </View>
+        ))}
       </DrawerContentScrollView>
 
       {/* OTA update banner */}
