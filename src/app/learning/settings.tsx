@@ -1,7 +1,5 @@
-import { useAuth } from '@/context/AuthContext';
 import { useLearningStore } from '@/features/learning/store';
-import type { Memory } from '@/features/learning/types';
-import { useRouter } from 'expo-router';
+import type { Difficulty, Memory } from '@/features/learning/types';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -21,17 +19,18 @@ const strToArr = (s: string) =>
     .map((x) => x.trim())
     .filter(Boolean);
 
+const SKILL_LEVELS: Difficulty[] = ['beginner', 'intermediate', 'advanced'];
+
 type FormState = {
   skill_level: string;
   preferred_resource_types: string;
   goals: string;
-  availability: string;
+  /** Backs `availability.minutes_per_day`, which is what the backend stores. */
+  minutes_per_day: string;
   known_topics: string;
 };
 
 export default function SettingsScreen() {
-  const { token } = useAuth();
-  const router = useRouter();
   const {
     memory,
     memoryLoading,
@@ -52,7 +51,7 @@ export default function SettingsScreen() {
     skill_level: '',
     preferred_resource_types: '',
     goals: '',
-    availability: '',
+    minutes_per_day: '',
     known_topics: '',
   });
   const [saving, setSaving] = useState(false);
@@ -69,11 +68,9 @@ export default function SettingsScreen() {
   const [scheduleError, setScheduleError] = useState('');
 
   useEffect(() => {
-    if (token) {
-      fetchMemory(token);
-      fetchTriggers(token);
-    }
-  }, [token]);
+    fetchMemory();
+    fetchTriggers();
+  }, []);
 
   useEffect(() => {
     setHour(digestHour);
@@ -85,10 +82,9 @@ export default function SettingsScreen() {
   const formatHour = (h: number) => `${String(h).padStart(2, '0')}:00`;
 
   const handleSaveSchedule = async () => {
-    if (!token) return;
     setScheduleError('');
     try {
-      await saveTriggerSettings(token, { schedule_hour: hour, timezone: tz.trim() });
+      await saveTriggerSettings({ schedule_hour: hour, timezone: tz.trim() });
       setScheduleSaved(true);
       setTimeout(() => setScheduleSaved(false), 2000);
     } catch (e: any) {
@@ -102,25 +98,29 @@ export default function SettingsScreen() {
         skill_level: memory.skill_level ?? '',
         preferred_resource_types: arrToStr(memory.preferred_resource_types),
         goals: arrToStr(memory.goals),
-        availability: memory.availability ?? '',
+        minutes_per_day: memory.availability?.minutes_per_day?.toString() ?? '',
         known_topics: arrToStr(memory.known_topics),
       });
     }
   }, [memory]);
 
   const handleSave = async () => {
-    if (!token) return;
     setSaving(true);
     setError('');
     try {
+      const minutes = parseInt(form.minutes_per_day, 10);
       const data: Partial<Memory> = {
-        skill_level: form.skill_level || undefined,
+        // The backend types skill_level as an enum, so only send a recognised
+        // value — free text would be rejected by the profile schema.
+        skill_level: SKILL_LEVELS.find((l) => l === form.skill_level.trim().toLowerCase()),
         preferred_resource_types: strToArr(form.preferred_resource_types),
         goals: strToArr(form.goals),
-        availability: form.availability || undefined,
+        availability: Number.isFinite(minutes)
+          ? { ...(memory?.availability ?? {}), minutes_per_day: minutes }
+          : undefined,
         known_topics: strToArr(form.known_topics),
       };
-      await saveMemory(token, data);
+      await saveMemory(data);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e: any) {
@@ -137,15 +137,14 @@ export default function SettingsScreen() {
         text: 'Clear',
         style: 'destructive',
         onPress: async () => {
-          if (!token) return;
           setClearing(true);
           try {
-            await deleteMemory(token);
+            await deleteMemory();
             setForm({
               skill_level: '',
               preferred_resource_types: '',
               goals: '',
-              availability: '',
+              minutes_per_day: '',
               known_topics: '',
             });
           } catch (e: any) {
@@ -159,11 +158,10 @@ export default function SettingsScreen() {
   };
 
   const handleToggleDigest = async () => {
-    if (!token) return;
     setToggling(true);
     try {
-      await toggleDigest(token);
-      fetchTriggers(token);
+      await toggleDigest();
+      fetchTriggers();
     } finally {
       setToggling(false);
     }
@@ -288,13 +286,16 @@ export default function SettingsScreen() {
 
               <View className="mb-4">
                 <Text className="mb-0.5 text-xs font-semibold text-gray-500">Available Time</Text>
-                <Text className="mb-1 text-xs text-gray-400">How much time you can dedicate</Text>
+                <Text className="mb-1 text-xs text-gray-400">
+                  Minutes you can study per day — used to pace your roadmap
+                </Text>
                 <TextInput
                   className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800"
-                  placeholder="e.g. 2 hours/day, weekends only"
+                  placeholder="e.g. 60"
                   placeholderTextColor="#9ca3af"
-                  value={form.availability}
-                  onChangeText={setField('availability')}
+                  keyboardType="number-pad"
+                  value={form.minutes_per_day}
+                  onChangeText={setField('minutes_per_day')}
                 />
               </View>
 
@@ -372,7 +373,7 @@ export default function SettingsScreen() {
         <View className="rounded-xl border border-red-100 bg-white p-4">
           <Text className="mb-1 text-sm font-semibold text-red-700">Danger Zone</Text>
           <Text className="mb-3 text-xs text-gray-500">
-            Permanently clear all stored preferences and learning history from the AI's memory.
+            Permanently clear all stored preferences and learning history from the AI&apos;s memory.
           </Text>
           <TouchableOpacity
             onPress={handleClearMemory}

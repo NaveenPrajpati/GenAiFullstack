@@ -1,17 +1,15 @@
-import { useAuth } from '@/context/AuthContext';
 import { useLearningStore } from '@/features/learning/store';
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, Linking, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 export default function DigestsScreen() {
-  const { token } = useAuth();
   const router = useRouter();
   const { digests, digestsLoading, fetchDigests } = useLearningStore();
 
   useEffect(() => {
-    if (token) fetchDigests(token);
-  }, [token]);
+    fetchDigests();
+  }, []);
 
   return (
     <View className="flex-1 bg-gray-50">

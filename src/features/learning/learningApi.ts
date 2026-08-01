@@ -1,30 +1,42 @@
-import { apiClient } from '@/context/AuthContext';
 import { BASE_URL } from '@/services/api';
-import type { StreamEvent } from './types';
+import http, { authedFetch } from '@/services/http';
+import type {
+  ProgressStatus,
+  RoadmapStatus,
+  StreamEvent,
+} from './types';
 
 const LR = `${BASE_URL}/learning`;
 
-type Token = string | null | undefined;
+/**
+ * Every call goes through `http` (axios), which attaches the bearer token and
+ * refreshes it once on a 401. The streaming call can't use axios — React Native
+ * can't read a streaming axios body — so it uses `authedFetch`, the fetch
+ * wrapper with the same token + refresh behavior.
+ */
+
+/**
+ * POST /query — one chat turn. Resolves to the whole turn at once.
+ * May come back as a `needs_approval` proposal or a `needs_input` onboarding
+ * prompt instead of a result.
+ */
+export async function query(body: { text: string; roadmapId?: string; thread_id: string }) {
+  const res = await http.post(`/learning/query`, body);
+  return res.data;
+}
 
 /**
  * POST /query/stream — same turn as `query`, but the answer streams back as
- * Server-Sent Events. Yields each parsed event as it arrives.
- *
- * axios can't read a streaming body in React Native, so this uses `fetch`
- * directly and attaches the same `Authorization: Bearer …` header `apiClient`
- * would. Pass `signal` to cancel an in-flight stream.
+ * Server-Sent Events. Yields each parsed event as it arrives. Pass `signal` to
+ * cancel an in-flight stream.
  */
 export async function* queryStream(
-  token: Token,
   body: { text: string; roadmapId?: string; thread_id: string },
   signal?: AbortSignal
 ): AsyncGenerator<StreamEvent> {
-  const res = await fetch(`${LR}/query/stream`, {
+  const res = await authedFetch(`${LR}/query/stream`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     signal,
   });
@@ -56,81 +68,127 @@ export async function* queryStream(
   }
 }
 
-/** GET /roadmaps — the user's roadmaps. */
-export async function getRoadmaps(token: Token) {
-  const res = await apiClient(token).get(`${LR}/roadmaps`);
-  return res.data;
-}
-
-/** POST /progress — mark a topic covered/uncovered. */
-export async function submitProgress(
-  token: Token,
-  body: { roadmapId: string; topicId: string; covered: boolean }
-) {
-  const res = await apiClient(token).post(`${LR}/progress`, body);
-  return res.data;
-}
-
-/** POST /query — free-text chat turn; may return a `needs_approval` proposal. */
-export async function query(
-  token: Token,
-  body: { text: string; roadmapId?: string; thread_id: string }
-) {
-  const res = await apiClient(token).post(`${LR}/query`, body);
-  return res.data;
-}
-
 /** POST /approvals — resolve a pending roadmap proposal. */
-export async function resolveApproval(
-  token: Token,
-  body: { thread_id: string; decision: 'approved' | 'rejected' }
-) {
-  const res = await apiClient(token).post(`${LR}/approvals`, body);
+export async function resolveApproval(body: {
+  thread_id: string;
+  decision: 'approved' | 'rejected';
+}) {
+  const res = await http.post(`/learning/approvals`, body);
+  return res.data;
+}
+
+/**
+ * POST /onboarding — answer (or skip) the first-run profile questions and let
+ * the paused turn finish. Send `null` to skip; the backend records that
+ * onboarding ran either way, so the prompt won't reappear.
+ */
+export async function submitOnboarding(body: {
+  thread_id: string;
+  answers: Record<string, string> | null;
+}) {
+  const res = await http.post(`/learning/onboarding`, body);
+  return res.data;
+}
+
+/** GET /roadmaps — the user's roadmaps, newest first. Paginated server-side. */
+export async function getRoadmaps(params?: {
+  status?: RoadmapStatus;
+  limit?: number;
+  skip?: number;
+}) {
+  const res = await http.get(`/learning/roadmaps`, { params });
+  return res.data;
+}
+
+/**
+ * GET /stats — progress across all roadmaps, for the landing screen's summary.
+ * Separate from /roadmaps because that endpoint is paginated: a global
+ * aggregate returned with one page would read as if it described the page.
+ */
+export async function getStats() {
+  const res = await http.get(`/learning/stats`);
+  return res.data;
+}
+
+/** GET /roadmaps/:id — one roadmap plus its server-computed progress. */
+export async function getRoadmap(roadmapId: string) {
+  const res = await http.get(`/learning/roadmaps/${roadmapId}`);
+  return res.data;
+}
+
+/** PATCH /roadmaps/:id — park, resume, or archive a roadmap. Which one is
+ *  `active` decides what a bare "what should I study next?" resolves to. */
+export async function updateRoadmapStatus(roadmapId: string, status: RoadmapStatus) {
+  const res = await http.patch(`/learning/roadmaps/${roadmapId}`, { status });
+  return res.data;
+}
+
+/** GET /current-state — the active roadmap and its progress, no id needed. */
+export async function getCurrentState() {
+  const res = await http.get(`/learning/current-state`);
+  return res.data;
+}
+
+/**
+ * POST /progress — set a topic's progress.
+ *
+ * `status` is the full vocabulary (in_progress, needs_review, skipped, …).
+ * `covered` is the original boolean and is still accepted, mapping to
+ * completed / not_started.
+ */
+export async function submitProgress(body: {
+  roadmapId: string;
+  topicId: string;
+  status?: ProgressStatus;
+  covered?: boolean;
+  mastery_score?: number;
+}) {
+  const res = await http.post(`/learning/progress`, body);
   return res.data;
 }
 
 /** POST /submit-quiz — grade a quiz attempt. */
-export async function submitQuiz(
-  token: Token,
-  body: { quizId: string; answers: { question: number; answer: number }[] }
-) {
-  const res = await apiClient(token).post(`${LR}/submit-quiz`, body);
+export async function submitQuiz(body: {
+  quizId: string;
+  answers: { question: number; answer: number }[];
+}) {
+  const res = await http.post(`/learning/submit-quiz`, body);
   return res.data;
 }
 
 /** GET /digests — recent topic digests. */
-export async function getDigests(token: Token, limit = 20) {
-  const res = await apiClient(token).get(`${LR}/digests?limit=${limit}`);
+export async function getDigests(limit = 20) {
+  const res = await http.get(`/learning/digests`, { params: { limit } });
   return res.data;
 }
 
 /** GET /memory — the user's learning profile. */
-export async function getMemory(token: Token) {
-  const res = await apiClient(token).get(`${LR}/memory`);
+export async function getMemory() {
+  const res = await http.get(`/learning/memory`);
   return res.data;
 }
 
 /** PUT /memory — update the learning profile. */
-export async function saveMemory(token: Token, data: Record<string, unknown>) {
-  const res = await apiClient(token).put(`${LR}/memory`, { data });
+export async function saveMemory(data: Record<string, unknown>) {
+  const res = await http.put(`/learning/memory`, { data });
   return res.data;
 }
 
 /** DELETE /memory — clear the learning profile. */
-export async function deleteMemory(token: Token) {
-  const res = await apiClient(token).delete(`${LR}/memory`);
+export async function deleteMemory() {
+  const res = await http.delete(`/learning/memory`);
   return res.data;
 }
 
 /** GET /triggers — current state of the user's auto-triggers (e.g. daily digest). */
-export async function getTriggers(token: Token) {
-  const res = await apiClient(token).get(`${LR}/triggers`);
+export async function getTriggers() {
+  const res = await http.get(`/learning/triggers`);
   return res.data;
 }
 
 /** POST /toggle-trigger — flip the daily digest auto-trigger. */
-export async function toggleTrigger(token: Token) {
-  const res = await apiClient(token).post(`${LR}/toggle-trigger`);
+export async function toggleTrigger() {
+  const res = await http.post(`/learning/toggle-trigger`);
   return res.data;
 }
 
@@ -139,10 +197,11 @@ export async function toggleTrigger(token: Token) {
  * and/or timezone. Upserts, so it works even before the first toggle. The
  * backend validates the hour range and the timezone (zoneinfo).
  */
-export async function updateTriggerSettings(
-  token: Token,
-  body: { enabled?: boolean; schedule_hour?: number; timezone?: string }
-) {
-  const res = await apiClient(token).patch(`${LR}/trigger-settings`, body);
+export async function updateTriggerSettings(body: {
+  enabled?: boolean;
+  schedule_hour?: number;
+  timezone?: string;
+}) {
+  const res = await http.patch(`/learning/trigger-settings`, body);
   return res.data;
 }

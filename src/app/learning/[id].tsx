@@ -1,36 +1,53 @@
-import { useAuth } from '@/context/AuthContext';
 import { useLearningStore } from '@/features/learning/store';
 import type { Roadmap, TopicNode } from '@/features/learning/types';
+import { formatMinutes, isCompleted } from '@/features/learning/types';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Clock } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Linking, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
+/** Groups topics under their real stage via `stage_id`. */
 function groupByStages(roadmap: Roadmap) {
   const sorted = [...roadmap.topics].sort((a, b) => a.order - b.order);
-  if (roadmap.stages.length === 0) return [{ stage: 'Topics', topics: sorted }];
-  const perStage = Math.ceil(sorted.length / roadmap.stages.length);
-  return roadmap.stages
-    .map((stage, i) => ({
-      stage,
-      topics: sorted.slice(i * perStage, (i + 1) * perStage),
-    }))
-    .filter((g) => g.topics.length > 0);
+  const stages = [...roadmap.stages].sort((a, b) => a.order - b.order);
+  if (stages.length === 0) return [{ id: 'all', stage: 'Topics', topics: sorted }];
+
+  const groups = stages.map((s) => ({
+    id: s.id,
+    stage: s.title,
+    topics: sorted.filter((t) => t.stage_id === s.id),
+  }));
+  // A topic the model never linked to a stage still has to appear somewhere.
+  const stageIds = new Set(stages.map((s) => s.id));
+  const orphans = sorted.filter((t) => !t.stage_id || !stageIds.has(t.stage_id));
+  if (orphans.length) groups.push({ id: 'other', stage: 'Other', topics: orphans });
+
+  return groups.filter((g) => g.topics.length > 0);
 }
 
 export default function RoadmapDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { token } = useAuth();
   const router = useRouter();
-  const { roadmaps, roadmapsLoading, fetchRoadmaps, submitProgress } = useLearningStore();
+  const {
+    roadmaps,
+    roadmapsLoading,
+    fetchRoadmaps,
+    submitProgress,
+    selectedTopic,
+    setSelectedTopic,
+  } = useLearningStore();
   const [progressError, setProgressError] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const roadmap = roadmaps.find((r) => r._id === id);
 
   useEffect(() => {
-    if (token && !roadmap) fetchRoadmaps(token);
-  }, [token, id]);
+    if (!roadmap) fetchRoadmaps();
+  }, [id]);
+
+  // A topic selection belongs to the roadmap it was made on, so drop it when
+  // this screen goes away or the learner opens a different roadmap.
+  useEffect(() => () => setSelectedTopic(null), [id]);
 
   if (roadmapsLoading && !roadmap) {
     return (
@@ -51,29 +68,33 @@ export default function RoadmapDetail() {
     );
   }
 
-  const covered = roadmap.topics.filter((t) => t.covered).length;
+  const completed = roadmap.topics.filter(isCompleted).length;
   const total = roadmap.topics.length;
-  const pct = total > 0 ? Math.round((covered / total) * 100) : 0;
+  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
   const groups = groupByStages(roadmap);
 
-  const toggleExpand = (topicId: string) =>
+  /** Tapping a topic both expands it and hands it to the chat panel, which is
+   *  where the per-topic actions (explain / quiz / resources) now live. */
+  const handleTopicPress = (topic: TopicNode) => {
+    const isOpen = expanded.has(topic.id);
     setExpanded((prev) => {
       const next = new Set(prev);
-      next.has(topicId) ? next.delete(topicId) : next.add(topicId);
+      isOpen ? next.delete(topic.id) : next.add(topic.id);
       return next;
     });
+    setSelectedTopic(
+      isOpen ? null : { roadmapId: roadmap._id, id: topic.id, title: topic.title }
+    );
+  };
 
   const handleToggle = async (topic: TopicNode) => {
     setProgressError('');
     try {
-      await submitProgress(token!, roadmap._id, topic.id, !topic.covered);
+      await submitProgress(roadmap._id, topic.id, isCompleted(topic) ? 'not_started' : 'completed');
     } catch {
       setProgressError('Failed to update progress. Please try again.');
     }
   };
-
-  const openChat = (prefill: string) =>
-    router.push({ pathname: '/learning/chat', params: { prefill, roadmapId: roadmap._id } });
 
   return (
     <View className="flex-1 bg-gray-50">
@@ -95,7 +116,7 @@ export default function RoadmapDetail() {
         </View>
         <View className="mt-1 flex-row justify-between">
           <Text className="text-xs text-gray-400">
-            {covered}/{total} topics complete
+            {completed}/{total} topics complete
           </Text>
           <Text className="text-xs font-semibold text-violet-600">{pct}%</Text>
         </View>
@@ -108,19 +129,26 @@ export default function RoadmapDetail() {
           </View>
         )}
 
-        {groups.map(({ stage, topics }) => (
-          <View key={stage} className="mb-5">
+        {groups.map(({ id: groupId, stage, topics }) => (
+          <View key={groupId} className="mb-5">
             <Text className="mb-2 text-xs font-bold tracking-widest text-gray-400 uppercase">
               {stage}
             </Text>
 
             {topics.map((topic) => {
               const isExpanded = expanded.has(topic.id);
+              const isSelected = selectedTopic?.id === topic.id;
+              const done = isCompleted(topic);
+              const duration = formatMinutes(topic.estimated_minutes);
               return (
                 <View
                   key={topic.id}
                   className={`mb-2 rounded-xl border bg-white p-4 ${
-                    topic.covered ? 'border-green-200' : 'border-gray-200'
+                    isSelected
+                      ? 'border-violet-400'
+                      : done
+                        ? 'border-green-200'
+                        : 'border-gray-200'
                   }`}>
                   {/* Topic row */}
                   <View className="flex-row items-start gap-3">
@@ -128,31 +156,38 @@ export default function RoadmapDetail() {
                     <TouchableOpacity
                       onPress={() => handleToggle(topic)}
                       className={`mt-0.5 h-5 w-5 items-center justify-center rounded-full border-2 ${
-                        topic.covered ? 'border-green-500 bg-green-500' : 'border-gray-300'
+                        done ? 'border-green-500 bg-green-500' : 'border-gray-300'
                       }`}>
-                      {topic.covered && <Text className="text-xs font-bold text-white">✓</Text>}
+                      {done && <Text className="text-xs font-bold text-white">✓</Text>}
                     </TouchableOpacity>
 
-                    {/* Title */}
+                    {/* Title — also selects the topic for the chat panel */}
                     <TouchableOpacity
                       className="flex-1"
-                      onPress={() => toggleExpand(topic.id)}
+                      onPress={() => handleTopicPress(topic)}
                       activeOpacity={0.7}>
                       <View className="flex-row items-center justify-between">
                         <Text
                           className={`flex-1 text-sm font-medium ${
-                            topic.covered ? 'text-gray-400 line-through' : 'text-gray-900'
+                            done ? 'text-gray-400 line-through' : 'text-gray-900'
                           }`}>
                           {topic.order}. {topic.title}
                         </Text>
                         <Text className="ml-2 text-xs text-gray-400">{isExpanded ? '▲' : '▼'}</Text>
                       </View>
-                      {topic.estimated_hours ? (
-                        <View className="mt-0.5 flex-row items-center gap-x-1">
-                          <Clock size={12} />
-                          <Text className="text-sm text-gray-400">{topic.estimated_hours}h</Text>
-                        </View>
-                      ) : null}
+                      <View className="mt-0.5 flex-row items-center gap-x-2">
+                        {duration ? (
+                          <View className="flex-row items-center gap-x-1">
+                            <Clock size={12} />
+                            <Text className="text-sm text-gray-400">{duration}</Text>
+                          </View>
+                        ) : null}
+                        {!!topic.difficulty && (
+                          <Text className="text-xs text-gray-400 capitalize">
+                            {topic.difficulty}
+                          </Text>
+                        )}
+                      </View>
                     </TouchableOpacity>
                   </View>
 
@@ -163,13 +198,26 @@ export default function RoadmapDetail() {
                         {topic.description}
                       </Text>
 
+                      {(topic.learning_outcomes ?? []).length > 0 && (
+                        <View className="mb-3">
+                          <Text className="mb-1 text-xs font-semibold text-gray-500">
+                            You&apos;ll be able to
+                          </Text>
+                          {topic.learning_outcomes!.map((o, i) => (
+                            <Text key={i} className="mb-0.5 text-xs text-gray-500">
+                              • {o}
+                            </Text>
+                          ))}
+                        </View>
+                      )}
+
                       {(topic.prerequisites ?? []).length > 0 && (
                         <View className="mb-3">
                           <Text className="mb-1 text-xs font-semibold text-gray-500">
                             Prerequisites
                           </Text>
                           <Text className="text-xs text-gray-500">
-                            {topic.prerequisites.join(', ')}
+                            {topic.prerequisites!.join(', ')}
                           </Text>
                         </View>
                       )}
@@ -180,42 +228,21 @@ export default function RoadmapDetail() {
                             Resources
                           </Text>
                           {topic.resources!.map((r, i) => (
-                            <Text key={i} className="mb-0.5 text-xs text-gray-500">
-                              • {r}
-                            </Text>
+                            <TouchableOpacity
+                              key={i}
+                              disabled={!r.url}
+                              onPress={() => r.url && Linking.openURL(r.url).catch(() => {})}>
+                              <Text
+                                className={`mb-0.5 text-xs ${
+                                  r.url ? 'text-blue-600 underline' : 'text-gray-500'
+                                }`}>
+                                • {r.title}
+                              </Text>
+                            </TouchableOpacity>
                           ))}
                         </View>
                       )}
 
-                      {/* Per-topic actions */}
-                      <View className="flex-row flex-wrap gap-2">
-                        <TouchableOpacity
-                          onPress={() => openChat(`Explain "${topic.title}"`)}
-                          className="rounded-lg bg-violet-50 px-3 py-1.5"
-                          activeOpacity={0.7}>
-                          <Text className="text-xs font-medium text-violet-700">Explain</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() =>
-                            openChat(
-                              `Quiz me on "${topic.title}" from the "${roadmap.title}" roadmap`
-                            )
-                          }
-                          className="rounded-lg bg-blue-50 px-3 py-1.5"
-                          activeOpacity={0.7}>
-                          <Text className="text-xs font-medium text-blue-700">Quiz me</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() =>
-                            openChat(
-                              `Find resources for "${topic.title}" from the "${roadmap.title}" roadmap`
-                            )
-                          }
-                          className="rounded-lg bg-gray-100 px-3 py-1.5"
-                          activeOpacity={0.7}>
-                          <Text className="text-xs font-medium text-gray-700">Find resources</Text>
-                        </TouchableOpacity>
-                      </View>
                     </View>
                   )}
                 </View>
@@ -223,13 +250,6 @@ export default function RoadmapDetail() {
             })}
           </View>
         ))}
-
-        <TouchableOpacity
-          onPress={() => openChat(`What should I study next in the "${roadmap.title}" roadmap?`)}
-          className="items-center rounded-xl bg-violet-600 py-4"
-          activeOpacity={0.8}>
-          <Text className="text-sm font-semibold text-white">Ask AI about this roadmap</Text>
-        </TouchableOpacity>
       </ScrollView>
     </View>
   );

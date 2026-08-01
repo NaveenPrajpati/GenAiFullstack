@@ -1,4 +1,3 @@
-import { useAuth } from '@/context/AuthContext';
 import { useLearningStore } from '@/features/learning/store';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -6,7 +5,6 @@ import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'rea
 
 export default function QuizScreen() {
   const router = useRouter();
-  const { token } = useAuth();
   const { activeQuiz, quizResult, submitQuiz, clearQuiz } = useLearningStore();
   const [selected, setSelected] = useState<(number | null)[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -49,14 +47,13 @@ export default function QuizScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!token) return;
     const payload = answers
       .map((a, i) => (a !== null ? { question: i, answer: a } : null))
       .filter((x): x is { question: number; answer: number } => x !== null);
     setSubmitting(true);
     setError('');
     try {
-      await submitQuiz(token, quizId, payload);
+      await submitQuiz(quizId, payload);
     } catch (e: any) {
       setError(e?.response?.data?.detail ?? 'Failed to submit quiz.');
     } finally {
@@ -103,7 +100,10 @@ export default function QuizScreen() {
                       Q{r.question + 1}: {questions[r.question]?.question}
                     </Text>
                     <Text className="text-xs text-red-500">
-                      Your answer: {questions[r.question]?.options[r.selected]}
+                      Your answer:{' '}
+                      {r.selected == null
+                        ? 'not answered'
+                        : (questions[r.question]?.options[r.selected] ?? '—')}
                     </Text>
                     <Text className="text-xs text-green-600">Correct: {r.correctOption}</Text>
                   </View>

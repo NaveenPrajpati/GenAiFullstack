@@ -1,8 +1,9 @@
 /**
  * Single Zustand store for the Learning Tracker feature.
  *
- * Auth note: actions take the current `token` as their first argument (pushed
- * down from screens via `useAuth()`); the store never reads React context.
+ * Auth note: nothing here (or in `learningApi`) handles tokens. Every request
+ * goes through the `http` axios instance, whose interceptor attaches the bearer
+ * token and refreshes it on a 401.
  *
  * All network access is delegated to `learningApi` — no axios/fetch here.
  */
@@ -12,11 +13,15 @@ import type {
   ChatMessage,
   ChatResultData,
   Digest,
+  LearningStats,
   Memory,
+  OnboardingPrompt,
+  ProgressStatus,
   Proposal,
   QuizQuestion,
   QuizResult,
   Roadmap,
+  SelectedTopic,
   Trigger,
 } from './types';
 
@@ -32,10 +37,25 @@ function interpretResult(result: any): { content: string; msgData: ChatResultDat
     const content = result.topic_explaination ?? '';
     return { content, msgData: { intent: 'explain', topic_explaination: content } };
   }
+  // The fallback agent answers greetings, capability questions, and anything
+  // off-scope. It writes prose into the same field the tutor uses.
+  if (result?.intent === 'chitchat' || result?.intent === 'fallback') {
+    const content = result.topic_explaination ?? '';
+    return { content, msgData: { type: 'plain', text: content } };
+  }
   if (result?.intent === 'quiz') {
     return {
       content: 'Here is a quiz for you!',
       msgData: { intent: 'quiz', quiz: result.quiz ?? [], quizId: result.quizId ?? '' },
+    };
+  }
+  if (result?.intent === 'submit_quiz') {
+    const r = result.quiz_result;
+    return {
+      content: r ? `You scored ${r.correct}/${r.total}.` : "I couldn't find that quiz.",
+      msgData: r
+        ? { intent: 'submit_quiz', quiz_result: r }
+        : { type: 'plain', text: "I couldn't find a quiz to grade." },
     };
   }
   if (result?.intent === 'find_resources') {
@@ -45,6 +65,12 @@ function interpretResult(result: any): { content: string; msgData: ChatResultDat
     };
   }
   if (result?.intent === 'query_roadmap') {
+    if (!result.progress?.total) {
+      return {
+        content: "You don't have a roadmap yet. Ask me to build one!",
+        msgData: { type: 'plain', text: "You don't have a roadmap yet. Ask me to build one!" },
+      };
+    }
     return {
       content: `Next topic: ${result.next_topic}`,
       msgData: {
@@ -68,41 +94,92 @@ function interpretResult(result: any): { content: string; msgData: ChatResultDat
   return { content, msgData: { type: 'plain', text: content } };
 }
 
+/**
+ * Maps ANY turn response into what the bubble should show: a finished result, a
+ * roadmap awaiting approval, or the onboarding questions.
+ *
+ * Every path goes through here — the first message, a stream event, and the
+ * resume that follows onboarding. That last one matters: answering onboarding
+ * runs straight into roadmap generation, so it comes back as an approval pause.
+ * Handling that only in `sendChatMessage` is what made the very first turn of a
+ * session render raw JSON instead of the roadmap card.
+ */
+function interpretTurn(
+  data: any,
+  fallbackThreadId: string
+): { content: string; msgData: ChatResultData } {
+  const kind = data?.status ?? data?.type;
+
+  if (kind === 'needs_input') {
+    return {
+      content: 'Before we start, tell me a little about how you learn.',
+      msgData: {
+        type: 'onboarding',
+        prompt: {
+          questions: data.proposal?.questions ?? [],
+          skippable: data.proposal?.skippable,
+          threadId: data.thread_id ?? fallbackThreadId,
+        },
+      },
+    };
+  }
+
+  if (kind === 'needs_approval' || kind === 'approval') {
+    return {
+      content: "I've prepared a roadmap for you. Please review it below.",
+      msgData: {
+        type: 'approval_request',
+        proposal: {
+          type: data.proposal?.type,
+          approvalId: data.proposal?.approvalId,
+          roadmap: data.proposal?.roadmap,
+          threadId: data.thread_id ?? fallbackThreadId,
+        },
+      },
+    };
+  }
+
+  return interpretResult(data?.result ?? data);
+}
+
 type LearningState = {
   roadmaps: Roadmap[];
   roadmapsLoading: boolean;
   roadmapsError: string;
-  fetchRoadmaps: (token: string) => Promise<void>;
-  optimisticUpdateTopic: (roadmapId: string, topicId: string, covered: boolean) => void;
-  submitProgress: (
-    token: string,
-    roadmapId: string,
-    topicId: string,
-    covered: boolean
-  ) => Promise<void>;
+  fetchRoadmaps: () => Promise<void>;
+  optimisticUpdateTopic: (roadmapId: string, topicId: string, status: ProgressStatus) => void;
+  submitProgress: (roadmapId: string, topicId: string, status: ProgressStatus) => Promise<void>;
+  setRoadmapStatus: (roadmapId: string, status: Roadmap['status']) => Promise<void>;
+
+  stats: LearningStats | null;
+  fetchStats: () => Promise<void>;
+
+  /** The topic tapped on the roadmap screen; scopes the chat panel's actions. */
+  selectedTopic: SelectedTopic | null;
+  setSelectedTopic: (topic: SelectedTopic | null) => void;
 
   chatMessages: ChatMessage[];
   chatThreadId: string;
   chatLoading: boolean;
   chatError: string;
   pendingProposal: Proposal | null;
-  sendChatMessage: (
-    token: string,
-    text: string,
-    roadmapId?: string,
-    stream?: boolean
-  ) => Promise<void>;
-  resolveProposal: (
-    token: string,
-    decision: 'approved' | 'rejected'
-  ) => Promise<string | undefined>;
+  /** Which bubble holds the live proposal, so it can be switched to a
+   *  confirmation once the decision lands instead of offering the buttons again. */
+  pendingProposalMessageId: string | null;
+  pendingOnboarding: OnboardingPrompt | null;
+  sendChatMessage: (text: string, roadmapId?: string, stream?: boolean) => Promise<void>;
+  /** Side effects of a rendered turn (pending proposal, quiz, roadmap refresh). */
+  applyTurnEffects: (msgData: ChatResultData, messageId: string | null) => void;
+  /** Renders a turn that arrived from resuming a paused run. */
+  appendTurn: (data: any) => void;
+  resolveProposal: (decision: 'approved' | 'rejected') => Promise<string | undefined>;
+  resolveOnboarding: (answers: Record<string, string> | null) => Promise<void>;
   resetChat: () => void;
 
   activeQuiz: { questions: QuizQuestion[]; quizId: string } | null;
   quizResult: QuizResult | null;
   setActiveQuiz: (quiz: QuizQuestion[], quizId: string) => void;
   submitQuiz: (
-    token: string,
     quizId: string,
     answers: { question: number; answer: number }[]
   ) => Promise<void>;
@@ -110,25 +187,22 @@ type LearningState = {
 
   digests: Digest[];
   digestsLoading: boolean;
-  fetchDigests: (token: string) => Promise<void>;
+  fetchDigests: () => Promise<void>;
 
   memory: Memory | null;
   memoryLoading: boolean;
-  fetchMemory: (token: string) => Promise<void>;
-  saveMemory: (token: string, data: Partial<Memory>) => Promise<void>;
-  deleteMemory: (token: string) => Promise<void>;
+  fetchMemory: () => Promise<void>;
+  saveMemory: (data: Partial<Memory>) => Promise<void>;
+  deleteMemory: () => Promise<void>;
 
   digestEnabled: boolean;
   digestHour: number;
   digestTimezone: string;
   digestLoading: boolean;
   digestSaving: boolean;
-  fetchTriggers: (token: string) => Promise<void>;
-  toggleDigest: (token: string) => Promise<void>;
-  saveTriggerSettings: (
-    token: string,
-    body: { schedule_hour?: number; timezone?: string }
-  ) => Promise<void>;
+  fetchTriggers: () => Promise<void>;
+  toggleDigest: () => Promise<void>;
+  saveTriggerSettings: (body: { schedule_hour?: number; timezone?: string }) => Promise<void>;
 };
 
 /** The daily-digest trigger out of a `{ result: Trigger[] }` GET /triggers response. */
@@ -149,10 +223,10 @@ export const useLearningStore = create<LearningState>((set, get) => ({
   roadmaps: [],
   roadmapsLoading: false,
   roadmapsError: '',
-  fetchRoadmaps: async (token) => {
+  fetchRoadmaps: async () => {
     set({ roadmapsLoading: true, roadmapsError: '' });
     try {
-      const data = await api.getRoadmaps(token);
+      const data = await api.getRoadmaps();
       set({ roadmaps: data.result ?? [] });
     } catch (e: any) {
       set({ roadmapsError: e?.response?.data?.detail ?? 'Failed to load roadmaps' });
@@ -160,31 +234,61 @@ export const useLearningStore = create<LearningState>((set, get) => ({
       set({ roadmapsLoading: false });
     }
   },
-  optimisticUpdateTopic: (roadmapId, topicId, covered) => {
+  optimisticUpdateTopic: (roadmapId, topicId, status) => {
     set((s) => ({
       roadmaps: s.roadmaps.map((r) =>
         r._id === roadmapId
-          ? { ...r, topics: r.topics.map((t) => (t.id === topicId ? { ...t, covered } : t)) }
+          ? {
+              ...r,
+              topics: r.topics.map((t) =>
+                t.id === topicId ? { ...t, progress_status: status } : t
+              ),
+            }
           : r
       ),
     }));
   },
-  submitProgress: async (token, roadmapId, topicId, covered) => {
-    get().optimisticUpdateTopic(roadmapId, topicId, covered);
+  submitProgress: async (roadmapId, topicId, status) => {
+    const previous = get()
+      .roadmaps.find((r) => r._id === roadmapId)
+      ?.topics.find((t) => t.id === topicId)?.progress_status;
+    get().optimisticUpdateTopic(roadmapId, topicId, status);
     try {
-      await api.submitProgress(token, { roadmapId, topicId, covered });
+      await api.submitProgress({ roadmapId, topicId, status });
     } catch {
-      get().optimisticUpdateTopic(roadmapId, topicId, !covered);
+      get().optimisticUpdateTopic(roadmapId, topicId, previous ?? 'not_started');
       throw new Error('Failed to update progress');
     }
   },
+  setRoadmapStatus: async (roadmapId, status) => {
+    await api.updateRoadmapStatus(roadmapId, status);
+    set((s) => ({
+      roadmaps: s.roadmaps.map((r) => (r._id === roadmapId ? { ...r, status } : r)),
+    }));
+  },
+
+  stats: null,
+  fetchStats: async () => {
+    try {
+      const data = await api.getStats();
+      set({ stats: data.result ?? null });
+    } catch {
+      // The summary strip is decorative — a failure here must not take the
+      // roadmap list down with it.
+    }
+  },
+
+  selectedTopic: null,
+  setSelectedTopic: (topic) => set({ selectedTopic: topic }),
 
   chatMessages: [],
   chatThreadId: genId(),
   chatLoading: false,
   chatError: '',
   pendingProposal: null,
-  sendChatMessage: async (token, text, roadmapId, stream = false) => {
+  pendingProposalMessageId: null,
+  pendingOnboarding: null,
+  sendChatMessage: async (text, roadmapId, stream = false) => {
     const threadId = get().chatThreadId;
     set((s) => ({
       chatMessages: [...s.chatMessages, { id: genId(), role: 'user', content: text }],
@@ -209,41 +313,13 @@ export const useLearningStore = create<LearningState>((set, get) => ({
         chatMessages: s.chatMessages.map((m) => (m.id === assistantId ? { ...m, ...p } : m)),
       }));
 
-    // Renders a `needs_approval` payload as a proposal card. Shared by the
-    // streaming and non-streaming paths.
-    const applyApproval = (event: any) => {
+    // Renders whatever the turn produced — result, approval, or onboarding —
+    // and applies its side effects. One path for streaming and non-streaming.
+    const applyTurn = (event: any) => {
       ensureAssistant();
-      const proposal: Proposal = {
-        type: event.proposal?.type,
-        approvalId: event.proposal?.approvalId,
-        roadmap: event.proposal?.roadmap,
-        threadId: event.thread_id ?? threadId,
-      };
-      set((s) => ({
-        pendingProposal: proposal,
-        chatThreadId: event.thread_id ?? s.chatThreadId,
-      }));
-      patch({
-        content: "I've prepared a roadmap for you. Please review it below.",
-        data: { type: 'approval_request', proposal },
-        streaming: false,
-      });
-    };
-
-    // Renders a structured turn result (explain / quiz / resources / …) and
-    // applies its side effects. Shared by both paths.
-    const applyResult = (event: any) => {
-      ensureAssistant();
-      const result = event.result ?? event;
-      const { content, msgData } = interpretResult(result);
+      const { content, msgData } = interpretTurn(event, threadId);
       patch({ content, data: msgData, streaming: false });
-      if (result?.intent === 'quiz') {
-        set({ activeQuiz: { questions: result.quiz ?? [], quizId: result.quizId ?? '' } });
-      } else if (result?.intent === 'update_progress' && result.roadmap) {
-        set((s) => ({
-          roadmaps: s.roadmaps.map((r) => (r._id === result.roadmap._id ? result.roadmap : r)),
-        }));
-      }
+      get().applyTurnEffects(msgData, assistantId);
     };
 
     try {
@@ -251,31 +327,31 @@ export const useLearningStore = create<LearningState>((set, get) => ({
 
       // Non-streaming path: one POST /query that returns the whole turn at once.
       if (!stream) {
-        const data = await api.query(token, body);
-        if (data?.type === 'approval' || data?.status === 'needs_approval') {
-          applyApproval(data);
-        } else {
-          applyResult(data);
-        }
+        applyTurn(await api.query(body));
         return;
       }
 
       let streamedText = '';
       let handledStructured = false;
 
-      for await (const event of api.queryStream(token, body)) {
+      for await (const event of api.queryStream(body)) {
+        // The pause events carry their kind in `type`, matching /query's `status`.
         if (event.type === 'token') {
           ensureAssistant();
           streamedText += event.token ?? '';
           patch({ content: streamedText });
-        } else if (event.type === 'approval' || event.status === 'needs_approval') {
+        } else if (
+          event.type === 'needs_input' ||
+          event.type === 'needs_approval' ||
+          event.type === 'approval' ||
+          event.type === 'done' ||
+          event.type === 'result' ||
+          event.result
+        ) {
           handledStructured = true;
-          applyApproval(event);
-        } else if (event.type === 'result' || event.intent || event.result) {
-          handledStructured = true;
-          applyResult(event);
+          applyTurn(event);
         } else if (event.type === 'error') {
-          throw new Error(event.detail ?? 'Stream error');
+          throw new Error(event.message ?? event.detail ?? 'Stream error');
         }
       }
 
@@ -295,38 +371,109 @@ export const useLearningStore = create<LearningState>((set, get) => ({
       set({ chatLoading: false });
     }
   },
-  resolveProposal: async (token, decision) => {
+  applyTurnEffects: (msgData, messageId) => {
+    if ('type' in msgData && msgData.type === 'approval_request') {
+      set((s) => ({
+        pendingProposal: msgData.proposal,
+        pendingProposalMessageId: messageId,
+        chatThreadId: msgData.proposal.threadId ?? s.chatThreadId,
+      }));
+    } else if ('type' in msgData && msgData.type === 'onboarding') {
+      set((s) => ({
+        pendingOnboarding: msgData.prompt,
+        chatThreadId: msgData.prompt.threadId ?? s.chatThreadId,
+      }));
+    } else if ('intent' in msgData && msgData.intent === 'quiz') {
+      set({ activeQuiz: { questions: msgData.quiz, quizId: msgData.quizId } });
+    } else if ('intent' in msgData && msgData.intent === 'submit_quiz') {
+      set({ quizResult: msgData.quiz_result });
+    } else if ('intent' in msgData && msgData.intent === 'update_progress' && msgData.roadmap) {
+      const updated = msgData.roadmap;
+      set((s) => ({
+        roadmaps: s.roadmaps.map((r) => (r._id === updated._id ? updated : r)),
+      }));
+    }
+  },
+  /** Appends a turn that arrived outside `sendChatMessage` — i.e. from resuming
+   *  a paused run — as a new assistant bubble. */
+  appendTurn: (data) => {
+    const { content, msgData } = interpretTurn(data, get().chatThreadId);
+    const id = genId();
+    set((s) => ({
+      chatMessages: [...s.chatMessages, { id, role: 'assistant', content, data: msgData }],
+    }));
+    get().applyTurnEffects(msgData, id);
+  },
+  resolveProposal: async (decision) => {
     const proposal = get().pendingProposal;
     if (!proposal) return undefined;
-    const data = await api.resolveApproval(token, {
-      thread_id: proposal.threadId,
-      decision,
-    });
-    set({ pendingProposal: null });
+    const messageId = get().pendingProposalMessageId;
+
+    const data = await api.resolveApproval({ thread_id: proposal.threadId, decision });
+    const savedRoadmapId = data.result?.roadmapId as string | undefined;
+
+    // Switch the card that raised this proposal to a confirmation, so the same
+    // roadmap can't be approved twice from a stale bubble.
+    set((s) => ({
+      pendingProposal: null,
+      pendingProposalMessageId: null,
+      chatMessages: s.chatMessages.map((m) =>
+        m.id === messageId && m.data && 'type' in m.data && m.data.type === 'approval_request'
+          ? { ...m, data: { ...m.data, decision, savedRoadmapId } }
+          : m
+      ),
+    }));
+
     if (decision === 'approved') {
-      await get().fetchRoadmaps(token);
-      return data.result?.roadmapId as string | undefined;
+      await get().fetchRoadmaps();
+      return savedRoadmapId;
     }
     return undefined;
   },
+  resolveOnboarding: async (answers) => {
+    const prompt = get().pendingOnboarding;
+    if (!prompt) return;
+    set({ chatLoading: true });
+    try {
+      const data = await api.submitOnboarding({ thread_id: prompt.threadId, answers });
+      set({ pendingOnboarding: null });
+      // Resuming finishes the turn the learner originally sent. On a first run
+      // that means it went straight on to build a roadmap, so this is usually
+      // another approval pause rather than a finished result — `appendTurn`
+      // handles either.
+      get().appendTurn(data);
+      // Reflect the saved profile so the questions don't reappear this session.
+      set((s) => ({ memory: { ...(s.memory ?? {}), ...(answers ?? {}), onboarded: true } }));
+    } finally {
+      set({ chatLoading: false });
+    }
+  },
   resetChat: () =>
-    set({ chatMessages: [], chatThreadId: genId(), chatError: '', pendingProposal: null }),
+    set({
+      chatMessages: [],
+      chatThreadId: genId(),
+      chatError: '',
+      pendingProposal: null,
+      pendingProposalMessageId: null,
+      pendingOnboarding: null,
+    }),
 
   activeQuiz: null,
   quizResult: null,
-  setActiveQuiz: (questions, quizId) => set({ activeQuiz: { questions, quizId }, quizResult: null }),
-  submitQuiz: async (token, quizId, answers) => {
-    const data = await api.submitQuiz(token, { quizId, answers });
+  setActiveQuiz: (questions, quizId) =>
+    set({ activeQuiz: { questions, quizId }, quizResult: null }),
+  submitQuiz: async (quizId, answers) => {
+    const data = await api.submitQuiz({ quizId, answers });
     set({ quizResult: data.result });
   },
   clearQuiz: () => set({ activeQuiz: null, quizResult: null }),
 
   digests: [],
   digestsLoading: false,
-  fetchDigests: async (token) => {
+  fetchDigests: async () => {
     set({ digestsLoading: true });
     try {
-      const data = await api.getDigests(token, 20);
+      const data = await api.getDigests(20);
       set({ digests: data.result ?? [] });
     } finally {
       set({ digestsLoading: false });
@@ -335,21 +482,21 @@ export const useLearningStore = create<LearningState>((set, get) => ({
 
   memory: null,
   memoryLoading: false,
-  fetchMemory: async (token) => {
+  fetchMemory: async () => {
     set({ memoryLoading: true });
     try {
-      const data = await api.getMemory(token);
+      const data = await api.getMemory();
       set({ memory: data.result ?? {} });
     } finally {
       set({ memoryLoading: false });
     }
   },
-  saveMemory: async (token, data) => {
-    await api.saveMemory(token, data);
+  saveMemory: async (data) => {
+    await api.saveMemory(data);
     set((s) => ({ memory: { ...s.memory, ...data } }));
   },
-  deleteMemory: async (token) => {
-    await api.deleteMemory(token);
+  deleteMemory: async () => {
+    await api.deleteMemory();
     set({ memory: null });
   },
 
@@ -358,10 +505,10 @@ export const useLearningStore = create<LearningState>((set, get) => ({
   digestTimezone: deviceTimezone,
   digestLoading: false,
   digestSaving: false,
-  fetchTriggers: async (token) => {
+  fetchTriggers: async () => {
     set({ digestLoading: true });
     try {
-      const data = await api.getTriggers(token);
+      const data = await api.getTriggers();
       const digest = findDigest(data.result ?? []);
       set({
         digestEnabled: !!digest?.enabled,
@@ -375,14 +522,14 @@ export const useLearningStore = create<LearningState>((set, get) => ({
       set({ digestLoading: false });
     }
   },
-  toggleDigest: async (token) => {
-    const data = await api.toggleTrigger(token);
+  toggleDigest: async () => {
+    const data = await api.toggleTrigger();
     set({ digestEnabled: data.enabled });
   },
-  saveTriggerSettings: async (token, body) => {
+  saveTriggerSettings: async (body) => {
     set({ digestSaving: true });
     try {
-      await api.updateTriggerSettings(token, body);
+      await api.updateTriggerSettings(body);
       // PATCH succeeded → reflect the saved values locally.
       set({
         ...(body.schedule_hour != null ? { digestHour: body.schedule_hour } : {}),

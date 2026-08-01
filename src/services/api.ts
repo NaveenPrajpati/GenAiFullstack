@@ -25,5 +25,3 @@ export const RagApis = {
   getallMessages: (id: string) => '/chat/'.concat(id, '/messages'),
   deleteChat: (id: string) => '/chat/'.concat(id),
 };
-// Learning Tracker endpoints live in the feature module: see
-// `@/features/learning/learningApi`.
