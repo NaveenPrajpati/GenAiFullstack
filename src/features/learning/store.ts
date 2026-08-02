@@ -12,15 +12,24 @@ import * as api from './learningApi';
 import type {
   ChatMessage,
   ChatResultData,
+  Checkpoint,
+  CheckpointOutcome,
   Digest,
+  DigestMarkResult,
+  DigestStatus,
+  DueReview,
+  LearningFocus,
+  LearningNote,
   LearningStats,
   Memory,
+  NoteKind,
   OnboardingPrompt,
   ProgressStatus,
   Proposal,
   QuizQuestion,
   QuizResult,
   Roadmap,
+  RoadmapInsights,
   SelectedTopic,
   Trigger,
 } from './types';
@@ -154,6 +163,44 @@ type LearningState = {
   stats: LearningStats | null;
   fetchStats: () => Promise<void>;
 
+  reviews: DueReview[];
+  fetchReviews: () => Promise<void>;
+
+  /** Profile-derived extras per roadmap, keyed by id. Separate from `roadmaps`
+   *  because it's derived server-side and refreshes on different triggers. */
+  insights: Record<string, RoadmapInsights>;
+  fetchInsights: (roadmapId: string) => Promise<void>;
+
+  /** One list, filtered by the caller. The topic notes section and the
+   *  consolidated view are the same query with different scopes. */
+  notes: LearningNote[];
+  notesLoading: boolean;
+  fetchNotes: (params?: {
+    roadmapId?: string;
+    topicId?: string;
+    kind?: NoteKind;
+  }) => Promise<void>;
+  addNote: (note: {
+    roadmapId: string;
+    topicId: string;
+    kind: NoteKind;
+    body: string;
+    url?: string;
+  }) => Promise<void>;
+  toggleNoteResolved: (noteId: string) => Promise<void>;
+  removeNote: (noteId: string) => Promise<void>;
+
+  /** The checkpoint currently open in a topic card, keyed by topic id. */
+  checkpoint: Checkpoint | null;
+  checkpointLoading: boolean;
+  checkpointOutcome: CheckpointOutcome | null;
+  checkpointError: string;
+  startCheckpoint: (topicId: string, roadmapId: string, regenerate?: boolean) => Promise<void>;
+  submitCheckpoint: (
+    answers: { question: number; answer: number }[]
+  ) => Promise<CheckpointOutcome | null>;
+  closeCheckpoint: () => void;
+
   /** The topic tapped on the roadmap screen; scopes the chat panel's actions. */
   selectedTopic: SelectedTopic | null;
   setSelectedTopic: (topic: SelectedTopic | null) => void;
@@ -187,7 +234,23 @@ type LearningState = {
 
   digests: Digest[];
   digestsLoading: boolean;
-  fetchDigests: () => Promise<void>;
+  fetchDigests: (params?: { status?: DigestStatus; active_only?: boolean }) => Promise<void>;
+  /** Outstanding digests across active roadmaps — the catch-up queue. */
+  unreadDigests: Digest[];
+  fetchUnreadDigests: () => Promise<void>;
+  /** What's underway and when the next digest is due. */
+  focus: LearningFocus | null;
+  fetchFocus: () => Promise<void>;
+  markDigest: (
+    digestId: string,
+    opts?: { answers?: { question: number; answer: number }[]; generateNext?: boolean }
+  ) => Promise<DigestMarkResult>;
+  /** Grading of the last failed recall check, keyed by digest id, so the card
+   *  can show what was wrong without the store owning per-card state. */
+  digestQuizFailures: Record<string, QuizResult>;
+  generatingDigest: boolean;
+  digestError: string;
+  generateNextDigest: (roadmapId?: string) => Promise<Digest | null>;
 
   memory: Memory | null;
   memoryLoading: boolean;
@@ -255,6 +318,13 @@ export const useLearningStore = create<LearningState>((set, get) => ({
     get().optimisticUpdateTopic(roadmapId, topicId, status);
     try {
       await api.submitProgress({ roadmapId, topicId, status });
+      // The streak and "this week" are derived server-side from completed_at,
+      // so they only move once the write lands. Refreshing here is what makes
+      // those counters feel live — without it they sit at their old values
+      // until the learner happens to return to the landing screen, which reads
+      // as though the tracker isn't recording anything. Not awaited: the tick
+      // should feel instant.
+      get().fetchStats();
     } catch {
       get().optimisticUpdateTopic(roadmapId, topicId, previous ?? 'not_started');
       throw new Error('Failed to update progress');
@@ -277,6 +347,141 @@ export const useLearningStore = create<LearningState>((set, get) => ({
       // roadmap list down with it.
     }
   },
+
+  reviews: [],
+  fetchReviews: async () => {
+    try {
+      const data = await api.getReviews();
+      set({ reviews: data.result ?? [] });
+    } catch {
+      // Surfacing reviews is additive; never let it break the screen.
+    }
+  },
+
+  insights: {},
+  fetchInsights: async (roadmapId) => {
+    try {
+      const r = await api.getRoadmap(roadmapId).then((d) => d.result);
+      set((s) => ({
+        insights: {
+          ...s.insights,
+          [roadmapId]: {
+            forecast: r.forecast ?? null,
+            personalization: r.personalization ?? null,
+            profile_changes: r.profile_changes ?? [],
+            current_personalization: r.current_personalization ?? {},
+            note_counts: r.note_counts ?? {},
+          },
+        },
+      }));
+    } catch {
+      // Derived extras — the roadmap itself renders fine without them.
+    }
+  },
+
+  notes: [],
+  notesLoading: false,
+  fetchNotes: async (params) => {
+    set({ notesLoading: true });
+    try {
+      const data = await api.getNotes(params);
+      set({ notes: data.result ?? [] });
+    } catch {
+      // Leave whatever is on screen rather than blanking the list.
+    } finally {
+      set({ notesLoading: false });
+    }
+  },
+  addNote: async (note) => {
+    const data = await api.createNote(note);
+    // Prepend rather than refetch: the list is newest-first, and a note the
+    // learner just typed should appear the instant they save it.
+    set((s) => ({ notes: [data.result, ...s.notes] }));
+    // The per-topic badge counts live with the roadmap insights.
+    get().fetchInsights(note.roadmapId);
+  },
+  toggleNoteResolved: async (noteId) => {
+    const note = get().notes.find((n) => n._id === noteId);
+    if (!note) return;
+    const resolved = !note.resolved;
+    set((s) => ({
+      notes: s.notes.map((n) => (n._id === noteId ? { ...n, resolved } : n)),
+    }));
+    try {
+      await api.updateNote(noteId, { resolved });
+    } catch {
+      set((s) => ({
+        notes: s.notes.map((n) => (n._id === noteId ? { ...n, resolved: !resolved } : n)),
+      }));
+    }
+  },
+  removeNote: async (noteId) => {
+    const previous = get().notes;
+    const note = previous.find((n) => n._id === noteId);
+    set({ notes: previous.filter((n) => n._id !== noteId) });
+    try {
+      await api.deleteNote(noteId);
+      if (note) get().fetchInsights(note.roadmapId);
+    } catch {
+      set({ notes: previous });
+    }
+  },
+
+  checkpoint: null,
+  checkpointLoading: false,
+  checkpointOutcome: null,
+  checkpointError: '',
+  startCheckpoint: async (topicId, roadmapId, regenerate = false) => {
+    set({ checkpointLoading: true, checkpointError: '', checkpointOutcome: null });
+    try {
+      const data = await api.startCheckpoint(topicId, roadmapId, regenerate);
+      set({ checkpoint: { ...data.result, roadmapId } });
+    } catch (e: any) {
+      set({
+        checkpointError:
+          e?.response?.data?.detail ?? 'Could not load the checkpoint. Try again.',
+      });
+    } finally {
+      set({ checkpointLoading: false });
+    }
+  },
+  submitCheckpoint: async (answers) => {
+    const checkpoint = get().checkpoint;
+    if (!checkpoint) return null;
+    set({ checkpointLoading: true, checkpointError: '' });
+    try {
+      const data = await api.submitCheckpoint(checkpoint.quizId, answers);
+      const outcome: CheckpointOutcome = data.result;
+      set({ checkpointOutcome: outcome });
+
+      // The checkpoint is the only thing that can complete a topic, so its
+      // result is what moves the roadmap — reflect it locally, then refresh the
+      // derived counters (streak, this week, reviews due) from the server.
+      get().optimisticUpdateTopic(
+        checkpoint.roadmapId,
+        checkpoint.topicId,
+        outcome.progress_status
+      );
+      get().fetchStats();
+      get().fetchReviews();
+      // The forecast counts remaining minutes, so finishing a topic moves the
+      // target date — refresh it with everything else the write derives.
+      get().fetchInsights(checkpoint.roadmapId);
+      // Passing hands the in-progress slot to the next topic server-side; the
+      // local copy has to be refetched or the roadmap shows nothing underway.
+      if (outcome.advanced_to) get().fetchRoadmaps();
+      return outcome;
+    } catch (e: any) {
+      set({
+        checkpointError: e?.response?.data?.detail ?? 'Could not grade that. Try again.',
+      });
+      return null;
+    } finally {
+      set({ checkpointLoading: false });
+    }
+  },
+  closeCheckpoint: () =>
+    set({ checkpoint: null, checkpointOutcome: null, checkpointError: '' }),
 
   selectedTopic: null,
   setSelectedTopic: (topic) => set({ selectedTopic: topic }),
@@ -470,13 +675,92 @@ export const useLearningStore = create<LearningState>((set, get) => ({
 
   digests: [],
   digestsLoading: false,
-  fetchDigests: async () => {
+  fetchDigests: async (params) => {
     set({ digestsLoading: true });
     try {
-      const data = await api.getDigests(20);
+      const data = await api.getDigests(params);
       set({ digests: data.result ?? [] });
     } finally {
       set({ digestsLoading: false });
+    }
+  },
+
+  unreadDigests: [],
+  fetchUnreadDigests: async () => {
+    try {
+      const data = await api.getDigests({ status: 'unread', active_only: true, limit: 50 });
+      set({ unreadDigests: data.result ?? [] });
+    } catch {
+      // The catch-up prompt is additive; never let it break the screen.
+    }
+  },
+  focus: null,
+  fetchFocus: async () => {
+    try {
+      const data = await api.getFocus();
+      set({ focus: data.result ?? null });
+    } catch {
+      // The home screen still renders the queue without it.
+    }
+  },
+
+  digestQuizFailures: {},
+  markDigest: async (digestId, opts = {}) => {
+    // No optimistic removal here: a digest carrying a recall check can be
+    // rejected, and yanking it out of the queue before the server accepts it
+    // would flash it away and back again.
+    try {
+      const data = await api.markDigest(digestId, {
+        answers: opts.answers,
+        generate_next: opts.generateNext,
+      });
+      const result: DigestMarkResult = data.result;
+
+      set((s) => ({
+        unreadDigests: [
+          ...s.unreadDigests.filter((d) => d._id !== digestId),
+          ...(result.generated ? [result.generated] : []),
+        ],
+        digests: s.digests.map((d) =>
+          d._id === digestId ? { ...d, status: 'marked' as const } : d
+        ),
+        digestQuizFailures: Object.fromEntries(
+          Object.entries(s.digestQuizFailures).filter(([k]) => k !== digestId)
+        ),
+      }));
+      return result;
+    } catch (e: any) {
+      // 422 means the recall check was wrong, and the body carries the grading.
+      const failed = e?.response?.data?.detail?.quiz_result;
+      if (failed) {
+        set((s) => ({ digestQuizFailures: { ...s.digestQuizFailures, [digestId]: failed } }));
+        throw new Error(
+          e?.response?.data?.detail?.message ?? 'Not quite — try again.'
+        );
+      }
+      throw new Error(e?.response?.data?.detail ?? 'Could not mark that digest.');
+    }
+  },
+
+  generatingDigest: false,
+  digestError: '',
+  generateNextDigest: async (roadmapId) => {
+    set({ generatingDigest: true, digestError: '' });
+    try {
+      const data = await api.generateDigest(roadmapId);
+      const digest: Digest = data.result;
+      set((s) => ({
+        unreadDigests: [digest, ...s.unreadDigests],
+        digests: [digest, ...s.digests],
+      }));
+      return digest;
+    } catch (e: any) {
+      set({
+        digestError: e?.response?.data?.detail ?? 'Could not fetch a new digest.',
+      });
+      return null;
+    } finally {
+      set({ generatingDigest: false });
     }
   },
 

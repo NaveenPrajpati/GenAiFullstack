@@ -5,7 +5,7 @@ import { ActivityIndicator, Linking, ScrollView, Text, TouchableOpacity, View } 
 
 export default function DigestsScreen() {
   const router = useRouter();
-  const { digests, digestsLoading, fetchDigests } = useLearningStore();
+  const { digests, digestsLoading, fetchDigests, markDigest } = useLearningStore();
 
   useEffect(() => {
     fetchDigests();
@@ -53,7 +53,11 @@ export default function DigestsScreen() {
             year: 'numeric',
           });
           return (
-            <View key={digest._id} className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
+            <View
+              key={digest._id}
+              className={`mb-4 rounded-xl border bg-white p-4 ${
+                digest.status === 'marked' ? 'border-gray-200' : 'border-violet-200'
+              }`}>
               <View className="mb-2 flex-row items-start justify-between">
                 <Text className="flex-1 pr-2 text-base font-semibold text-gray-900">
                   {digest.topicTitle}
@@ -79,6 +83,25 @@ export default function DigestsScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
+              )}
+
+              {digest.status === 'marked' ? (
+                <Text className="mt-3 text-xs text-gray-400">
+                  ✓ Marked
+                  {digest.updatedAt
+                    ? ` ${new Date(digest.updatedAt).toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                      })}`
+                    : ''}
+                </Text>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => markDigest(digest._id).catch(() => {})}
+                  className="mt-3 items-center rounded-lg bg-green-600 py-2.5"
+                  activeOpacity={0.8}>
+                  <Text className="text-sm font-semibold text-white">✓ Got it</Text>
+                </TouchableOpacity>
               )}
             </View>
           );

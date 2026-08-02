@@ -442,9 +442,7 @@ function TopicActions({
             }`}
             activeOpacity={0.7}>
             <Text
-              className={`text-xs font-medium ${
-                disabled ? 'text-gray-400' : 'text-violet-700'
-              }`}>
+              className={`text-xs font-medium ${disabled ? 'text-gray-400' : 'text-violet-700'}`}>
               {a.label}
             </Text>
           </TouchableOpacity>
@@ -462,7 +460,11 @@ export default function ChatBot() {
   // GLOBAL, not local: this panel is rendered by the section layout, and
   // useLocalSearchParams only sees params of the route it is rendered in — from
   // a layout that's empty.
-  const { prefill, source, roadmapId: roadmapIdParam } = useGlobalSearchParams<{
+  const {
+    prefill,
+    source,
+    roadmapId: roadmapIdParam,
+  } = useGlobalSearchParams<{
     prefill?: string;
     roadmapId?: string;
     source?: string;
@@ -576,7 +578,9 @@ export default function ChatBot() {
   };
 
   return (
-    <View className="flex-1 rounded-xl border border-gray-300 bg-gray-50">
+    <View
+      className="rounded-xl border border-gray-300 bg-gray-500"
+      style={{ width: isMobile ? width * 0.9 : 400 }}>
       <View className="border-b border-gray-200 bg-white px-5 py-4">
         <View className="flex-row items-center justify-between">
           <View>

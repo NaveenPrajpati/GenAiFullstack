@@ -13,8 +13,10 @@ export default function LearningLayout() {
     <View className="flex-1">
       <Stack screenOptions={{ headerShown: true, headerBackButtonDisplayMode: 'minimal' }}>
         <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="roadmaps" options={{ headerShown: false }} />
         <Stack.Screen name="[id]" options={{ title: 'Roadmap' }} />
         <Stack.Screen name="quiz" />
+        <Stack.Screen name="notes" options={{ title: 'My notes' }} />
         <Stack.Screen name="digests" />
         <Stack.Screen name="settings" />
       </Stack>

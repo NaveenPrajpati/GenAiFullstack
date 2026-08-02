@@ -112,6 +112,8 @@ export type RoadmapDraft = {
   topics: TopicDraft[];
 };
 
+export type DigestStatus = 'unread' | 'marked';
+
 export type Digest = {
   _id: string;
   roadmapId: string;
@@ -119,7 +121,35 @@ export type Digest = {
   topicTitle: string;
   bullets: string[];
   resources: { title: string; url: string }[];
+  /** Acknowledging a digest is the only signal that it actually landed. */
+  status: DigestStatus;
+  /** 1-based position in the drip-feed for this topic. */
+  sequence?: number;
+  /** Recall check over EARLIER digests. Must be passed to mark this one.
+   *  Null on the first digest of a topic — nothing to recall yet. */
+  quizId?: string | null;
+  /** The recall check's questions, answer-free. Empty when there's no check. */
+  quiz?: QuizQuestion[];
+  /** Set once the tips have taught the whole topic: the checkpoint comes next,
+   *  not another digest. */
+  coverage_complete?: boolean;
+  missing_outcomes?: string[];
   createdAt: string;
+  /** When it was marked — marking is the only thing that updates a digest. */
+  updatedAt?: string;
+  roadmapTitle?: string | null;
+};
+
+/** What came back from acknowledging a digest. */
+export type DigestMarkResult = {
+  digestId: string;
+  quiz_result: QuizResult | null;
+  generated: Digest | null;
+  remaining: number;
+  next: Digest | null;
+  coverage_complete: boolean;
+  topicId: string;
+  roadmapId: string;
 };
 
 export type LearningAvailability = {
@@ -166,6 +196,126 @@ export type QuizResult = {
   }[];
 };
 
+/**
+ * Something the learner wrote down against a topic. One shape covers a jotting,
+ * a code snippet, a saved link, and a question to revisit — they differ in how
+ * they render and filter, not in what they are.
+ */
+export type NoteKind = 'note' | 'snippet' | 'link' | 'question';
+
+export type LearningNote = {
+  _id: string;
+  roadmapId: string;
+  topicId: string;
+  kind: NoteKind;
+  body: string;
+  url?: string | null;
+  /** Questions get ticked off once answered. */
+  resolved: boolean;
+  createdAt: string;
+  updatedAt?: string;
+  /** Resolved server-side at read time; null if the topic was later removed. */
+  roadmapTitle?: string | null;
+  topicTitle?: string | null;
+};
+
+/**
+ * What the learner is working on and when the next digest lands. Every field
+ * that can be absent comes with a `blocked_reason`, so the home screen can say
+ * *why* nothing is coming rather than showing an empty state.
+ */
+export type LearningFocus = {
+  roadmapId: string | null;
+  roadmapTitle: string | null;
+  topic: {
+    id: string;
+    title: string;
+    progress_status: ProgressStatus;
+    order: number;
+  } | null;
+  progress: RoadmapProgress;
+  unread: number;
+  cap: number;
+  can_generate: boolean;
+  /** ISO timestamp of the next scheduled digest; null when digests are off. */
+  next_at: string | null;
+  blocked_reason:
+    | 'no_roadmap'
+    | 'cap_reached'
+    | 'needs_review'
+    | 'roadmap_complete'
+    | 'digests_off'
+    | null;
+};
+
+/** When the learner's stated pace gets them to the end of a roadmap. */
+export type CompletionForecast = {
+  remaining_minutes: number;
+  study_days: number;
+  calendar_days: number;
+  target_date: string;
+  minutes_per_day: number;
+  days_per_week: number;
+  deadline?: string | null;
+  /** Null when no deadline is set. */
+  on_track?: boolean | null;
+};
+
+/**
+ * Everything the learner's profile implies about one roadmap. Kept separate from
+ * the roadmap document because it's derived, not stored: the forecast moves as
+ * topics get completed, and drift moves as the profile is edited.
+ */
+export type RoadmapInsights = {
+  forecast: CompletionForecast | null;
+  /** What the roadmap was built from. Null if generated before we recorded it. */
+  personalization: Record<string, any> | null;
+  /** Personalization inputs that have changed since. */
+  profile_changes: string[];
+  current_personalization: Record<string, any>;
+  /** {topicId: count} — which topics have been written about. */
+  note_counts: Record<string, number>;
+};
+
+/** The active-recall check a learner must pass to complete a topic. */
+export type Checkpoint = {
+  quizId: string;
+  topicId: string;
+  /** Filled in client-side from the request; the server keys it off the quiz. */
+  roadmapId: string;
+  title: string;
+  /** True when this is a spaced-repetition review of an already-completed topic. */
+  is_review: boolean;
+  pass_score: number;
+  questions: QuizQuestion[];
+};
+
+export type CheckpointOutcome = {
+  passed: boolean;
+  score: number;
+  pass_score: number;
+  total: number;
+  correct: number;
+  review: QuizResult['review'];
+  progress_status: ProgressStatus;
+  next_review_at?: string;
+  review_count: number;
+  was_review: boolean;
+  /** The topic that picked up the slot after this one was completed. */
+  advanced_to?: { topicId: string; title: string } | null;
+};
+
+/** A completed topic whose spaced-repetition review has come due. */
+export type DueReview = {
+  roadmapId: string;
+  roadmapTitle: string;
+  topicId: string;
+  title: string;
+  due_at: string;
+  mastery_score?: number;
+  review_count: number;
+};
+
 export type RoadmapProgress = {
   next_topic: string | null;
   next_topic_id: string | null;
@@ -189,6 +339,8 @@ export type LearningStats = {
   completed_this_week: number;
   /** Consecutive days ending today with at least one topic completed. */
   streak_days: number;
+  /** Completed topics whose spaced-repetition review has come due. */
+  reviews_due: number;
   quizzes: { attempts: number; average_score: number };
 };
 

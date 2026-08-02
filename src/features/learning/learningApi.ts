@@ -1,6 +1,8 @@
 import { BASE_URL } from '@/services/api';
 import http, { authedFetch } from '@/services/http';
 import type {
+  DigestStatus,
+  NoteKind,
   ProgressStatus,
   RoadmapStatus,
   StreamEvent,
@@ -123,6 +125,12 @@ export async function updateRoadmapStatus(roadmapId: string, status: RoadmapStat
   return res.data;
 }
 
+/** GET /focus — what's underway and when the next digest is due. */
+export async function getFocus() {
+  const res = await http.get(`/learning/focus`);
+  return res.data;
+}
+
 /** GET /current-state — the active roadmap and its progress, no id needed. */
 export async function getCurrentState() {
   const res = await http.get(`/learning/current-state`);
@@ -147,6 +155,37 @@ export async function submitProgress(body: {
   return res.data;
 }
 
+/**
+ * POST /topics/:topicId/checkpoint — issue the active-recall check for a topic.
+ * Answers are never sent to the client; grading happens server-side.
+ */
+export async function startCheckpoint(
+  topicId: string,
+  roadmapId: string,
+  regenerate = false
+) {
+  const res = await http.post(`/learning/topics/${topicId}/checkpoint`, {
+    roadmapId,
+    regenerate,
+  });
+  return res.data;
+}
+
+/** POST /checkpoint/submit — grade it. Passing is what completes the topic. */
+export async function submitCheckpoint(
+  quizId: string,
+  answers: { question: number; answer: number }[]
+) {
+  const res = await http.post(`/learning/checkpoint/submit`, { quizId, answers });
+  return res.data;
+}
+
+/** GET /reviews — topics whose spaced-repetition review has come due. */
+export async function getReviews(limit = 20) {
+  const res = await http.get(`/learning/reviews`, { params: { limit } });
+  return res.data;
+}
+
 /** POST /submit-quiz — grade a quiz attempt. */
 export async function submitQuiz(body: {
   quizId: string;
@@ -156,9 +195,91 @@ export async function submitQuiz(body: {
   return res.data;
 }
 
-/** GET /digests — recent topic digests. */
-export async function getDigests(limit = 20) {
-  const res = await http.get(`/learning/digests`, { params: { limit } });
+/**
+ * GET /notes — what the learner has written down, newest first.
+ * Unfiltered this is the consolidated view; scoped to a topic it backs the
+ * notes section on the roadmap screen.
+ */
+export async function getNotes(params?: {
+  roadmapId?: string;
+  topicId?: string;
+  kind?: NoteKind;
+  limit?: number;
+  skip?: number;
+}) {
+  const res = await http.get(`/learning/notes`, { params });
+  return res.data;
+}
+
+/** POST /notes — jot a note, snippet, link, or question against a topic. */
+export async function createNote(body: {
+  roadmapId: string;
+  topicId: string;
+  kind: NoteKind;
+  body: string;
+  url?: string;
+}) {
+  const res = await http.post(`/learning/notes`, body);
+  return res.data;
+}
+
+/** PATCH /notes/:id — edit the text, or tick off a question. */
+export async function updateNote(
+  noteId: string,
+  body: { body?: string; url?: string; resolved?: boolean }
+) {
+  const res = await http.patch(`/learning/notes/${noteId}`, body);
+  return res.data;
+}
+
+/** DELETE /notes/:id */
+export async function deleteNote(noteId: string) {
+  const res = await http.delete(`/learning/notes/${noteId}`);
+  return res.data;
+}
+
+/**
+ * GET /digests — recent topic digests.
+ * `{ status: 'unread', active_only: true }` is the catch-up queue.
+ */
+export async function getDigests(params?: {
+  status?: DigestStatus;
+  active_only?: boolean;
+  limit?: number;
+}) {
+  const res = await http.get(`/learning/digests`, {
+    params: { limit: 20, ...params },
+  });
+  return res.data;
+}
+
+/**
+ * POST /digests/:id/mark — acknowledge one; returns what's next in the queue.
+ *
+ * `answers` is required when the digest carries a recall check (every digest
+ * after the first on a topic); a wrong set comes back as 422 with the grading.
+ * `generate_next` pulls the following digest in the same step.
+ */
+export async function markDigest(
+  digestId: string,
+  body: {
+    answers?: { question: number; answer: number }[];
+    generate_next?: boolean;
+  } = {}
+) {
+  const res = await http.post(`/learning/digests/${digestId}/mark`, {
+    answers: body.answers ?? [],
+    generate_next: body.generate_next ?? false,
+  });
+  return res.data;
+}
+
+/** POST /digests/generate — pull the next digest now instead of waiting for the
+ *  daily sweep. Declines with 409 if the current topic already has an unread one. */
+export async function generateDigest(roadmapId?: string) {
+  const res = await http.post(`/learning/digests/generate`, null, {
+    params: roadmapId ? { roadmapId } : undefined,
+  });
   return res.data;
 }
 

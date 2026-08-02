@@ -265,7 +265,11 @@ export default function SettingsScreen() {
 
         {/* Learning Profile */}
         <View className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
-          <Text className="mb-4 text-sm font-semibold text-gray-900">Learning Profile</Text>
+          <Text className="mb-1 text-sm font-semibold text-gray-900">Learning Profile</Text>
+          <Text className="mb-4 text-xs leading-relaxed text-gray-500">
+            Shapes how new roadmaps are built and paced. Existing roadmaps will offer to update
+            themselves once you change something here.
+          </Text>
 
           {memoryLoading ? (
             <View className="items-center py-6">
