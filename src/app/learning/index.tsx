@@ -1,21 +1,9 @@
 import ScreenHeader from '@/components/layout/ScreenHeader';
 import { useLearningStore } from '@/features/learning/store';
-import type {
-  Digest,
-  LearningFocus,
-  LearningStats,
-  QuizResult,
-} from '@/features/learning/types';
+import type { Digest, LearningFocus, LearningStats, QuizResult } from '@/features/learning/types';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Linking,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Linking, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 /**
  * The learning home: what needs attention today.
@@ -120,20 +108,15 @@ function FocusCard({
         />
       </View>
       <Text className="mt-1 text-[11px] text-gray-400">
-        {focus.progress.completed_count}/{focus.progress.total} topics ·{' '}
-        {focus.progress.percent}%
+        {focus.progress.completed_count}/{focus.progress.total} topics · {focus.progress.percent}%
       </Text>
 
       <View className="mt-3 border-t border-gray-100 pt-3">
         <Text className="text-xs text-gray-500">
-          {focus.next_at
-            ? `Next digest ${untilNext(focus.next_at)}`
-            : 'No digest scheduled'}
+          {focus.next_at ? `Next digest ${untilNext(focus.next_at)}` : 'No digest scheduled'}
         </Text>
         {!!focus.blocked_reason && (
-          <Text className="mt-0.5 text-[11px] text-gray-400">
-            {note[focus.blocked_reason]}
-          </Text>
+          <Text className="mt-0.5 text-[11px] text-gray-400">{note[focus.blocked_reason]}</Text>
         )}
 
         {focus.blocked_reason === 'needs_review' ? (
@@ -186,10 +169,7 @@ function DigestCard({
 }: {
   digest: Digest;
   failure?: QuizResult;
-  onMark: (
-    answers: { question: number; answer: number }[],
-    generateNext: boolean
-  ) => void;
+  onMark: (answers: { question: number; answer: number }[], generateNext: boolean) => void;
   busy: boolean;
 }) {
   const router = useRouter();
@@ -316,8 +296,7 @@ function DigestCard({
           {busy ? (
             <ActivityIndicator size="small" />
           ) : (
-            <Text
-              className={`text-xs font-semibold ${ready ? 'text-white' : 'text-gray-400'}`}>
+            <Text className={`text-xs font-semibold ${ready ? 'text-white' : 'text-gray-400'}`}>
               Mark
             </Text>
           )}
@@ -371,9 +350,9 @@ export default function LearningHome() {
     }, [])
   );
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (id: string) => {
     setError('');
-    const digest = await generateNextDigest(focus?.roadmapId ?? undefined);
+    const digest = await generateNextDigest(id ?? undefined);
     if (!digest) setError(useLearningStore.getState().digestError);
     // Generating changes the backlog and may complete the topic's coverage.
     fetchFocus();
@@ -422,15 +401,15 @@ export default function LearningHome() {
         }
       />
 
-      {!!focus && (
-        <FocusCard
-          focus={focus}
-          onGenerate={handleGenerate}
-          generating={generatingDigest}
-        />
-      )}
-
       {!!stats && <StatsRow stats={stats} />}
+      {!!focus &&
+        focus.roadmaps.map((item, ind) => (
+          <FocusCard
+            focus={item}
+            onGenerate={() => handleGenerate(item.roadmapId)}
+            generating={generatingDigest}
+          />
+        ))}
 
       {reviews.length > 0 && (
         <TouchableOpacity
@@ -465,9 +444,7 @@ export default function LearningHome() {
             and when the next digest lands, which is the useful answer to an
             empty queue. */}
         {caughtUp && !!focus?.roadmapId && (
-          <Text className="py-6 text-center text-xs text-gray-400">
-            ✨ Nothing to catch up on
-          </Text>
+          <Text className="py-6 text-center text-xs text-gray-400">✨ Nothing to catch up on</Text>
         )}
       </ScrollView>
     </View>

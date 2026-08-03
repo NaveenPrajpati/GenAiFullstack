@@ -13,23 +13,12 @@
  */
 
 export type ResourceType =
-  | 'article'
-  | 'video'
-  | 'course'
-  | 'documentation'
-  | 'book'
-  | 'exercise'
-  | 'project'
-  | 'other';
+  'article' | 'video' | 'course' | 'documentation' | 'book' | 'exercise' | 'project' | 'other';
 
 export type Difficulty = 'beginner' | 'intermediate' | 'advanced';
 
 export type ProgressStatus =
-  | 'not_started'
-  | 'in_progress'
-  | 'needs_review'
-  | 'completed'
-  | 'skipped';
+  'not_started' | 'in_progress' | 'needs_review' | 'completed' | 'skipped';
 
 export type RoadmapStatus = 'draft' | 'active' | 'paused' | 'archived' | 'completed';
 
@@ -163,11 +152,7 @@ export type Memory = {
   skill_level?: Difficulty;
   preferred_resource_types?: string[];
   preferred_explanation_style?:
-    | 'concise'
-    | 'step_by_step'
-    | 'examples_first'
-    | 'visual'
-    | 'socratic';
+    'concise' | 'step_by_step' | 'examples_first' | 'visual' | 'socratic';
   preferred_language?: string;
   goals?: string[];
   availability?: LearningAvailability;
@@ -225,27 +210,29 @@ export type LearningNote = {
  * *why* nothing is coming rather than showing an empty state.
  */
 export type LearningFocus = {
-  roadmapId: string | null;
-  roadmapTitle: string | null;
-  topic: {
-    id: string;
-    title: string;
-    progress_status: ProgressStatus;
-    order: number;
-  } | null;
-  progress: RoadmapProgress;
+  roadmaps: Array<{
+    roadmapId: string | null;
+    roadmapTitle: string | null;
+    topic: {
+      id: string;
+      title: string;
+      progress_status: ProgressStatus;
+      order: number;
+    } | null;
+    progress: RoadmapProgress;
+    unread: number;
+    cap: number;
+    can_generate: boolean;
+    /** ISO timestamp of the next scheduled digest; null when digests are off. */
+    next_at: string | null;
+    blocked_reason:
+      'no_roadmap' | 'cap_reached' | 'needs_review' | 'roadmap_complete' | 'digests_off' | null;
+  }>;
   unread: number;
   cap: number;
-  can_generate: boolean;
-  /** ISO timestamp of the next scheduled digest; null when digests are off. */
   next_at: string | null;
   blocked_reason:
-    | 'no_roadmap'
-    | 'cap_reached'
-    | 'needs_review'
-    | 'roadmap_complete'
-    | 'digests_off'
-    | null;
+    'no_roadmap' | 'cap_reached' | 'needs_review' | 'roadmap_complete' | 'digests_off' | null;
 };
 
 /** When the learner's stated pace gets them to the end of a roadmap. */
