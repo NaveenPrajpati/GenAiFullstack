@@ -1,3 +1,4 @@
+import ChatBot from '@/components/layout/ChatBot';
 import { Stack, usePathname } from 'expo-router';
 import { View } from 'react-native';
 
@@ -20,11 +21,11 @@ export default function LearningLayout() {
         <Stack.Screen name="settings" />
       </Stack>
 
-      {/* {showChat && (
+      {showChat && (
         <View className="absolute right-4 bottom-4">
           <ChatBot />
         </View>
-      )} */}
+      )}
     </View>
   );
 }

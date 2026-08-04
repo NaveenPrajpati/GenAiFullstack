@@ -158,6 +158,8 @@ type LearningState = {
   fetchRoadmaps: () => Promise<void>;
   optimisticUpdateTopic: (roadmapId: string, topicId: string, status: ProgressStatus) => void;
   submitProgress: (roadmapId: string, topicId: string, status: ProgressStatus) => Promise<void>;
+  /** Park, resume, or archive. Rejects with the server's message when resuming
+   *  would exceed the active cap, so the caller can show it verbatim. */
   setRoadmapStatus: (roadmapId: string, status: Roadmap['status']) => Promise<void>;
 
   stats: LearningStats | null;
@@ -175,11 +177,7 @@ type LearningState = {
    *  consolidated view are the same query with different scopes. */
   notes: LearningNote[];
   notesLoading: boolean;
-  fetchNotes: (params?: {
-    roadmapId?: string;
-    topicId?: string;
-    kind?: NoteKind;
-  }) => Promise<void>;
+  fetchNotes: (params?: { roadmapId?: string; topicId?: string; kind?: NoteKind }) => Promise<void>;
   addNote: (note: {
     roadmapId: string;
     topicId: string;
@@ -226,15 +224,20 @@ type LearningState = {
   activeQuiz: { questions: QuizQuestion[]; quizId: string } | null;
   quizResult: QuizResult | null;
   setActiveQuiz: (quiz: QuizQuestion[], quizId: string) => void;
-  submitQuiz: (
-    quizId: string,
-    answers: { question: number; answer: number }[]
-  ) => Promise<void>;
+  submitQuiz: (quizId: string, answers: { question: number; answer: number }[]) => Promise<void>;
   clearQuiz: () => void;
 
   digests: Digest[];
   digestsLoading: boolean;
-  fetchDigests: (params?: { status?: DigestStatus; active_only?: boolean }) => Promise<void>;
+  digestsError: string;
+  /** The digest archive. `roadmapId`/`topicId` narrow it server-side. */
+  fetchDigests: (params?: {
+    status?: DigestStatus;
+    active_only?: boolean;
+    limit?: number;
+    roadmapId?: string;
+    topicId?: string;
+  }) => Promise<void>;
   /** Outstanding digests across active roadmaps — the catch-up queue. */
   unreadDigests: Digest[];
   fetchUnreadDigests: () => Promise<void>;
@@ -250,7 +253,7 @@ type LearningState = {
   digestQuizFailures: Record<string, QuizResult>;
   generatingDigest: boolean;
   digestError: string;
-  generateNextDigest: (roadmapId?: string) => Promise<Digest | null>;
+  generateNextDigest: (roadmapId?: string, topicId?: string) => Promise<Digest | null>;
 
   memory: Memory | null;
   memoryLoading: boolean;
@@ -331,10 +334,24 @@ export const useLearningStore = create<LearningState>((set, get) => ({
     }
   },
   setRoadmapStatus: async (roadmapId, status) => {
-    await api.updateRoadmapStatus(roadmapId, status);
+    try {
+      await api.updateRoadmapStatus(roadmapId, status);
+    } catch (e: any) {
+      // 409 is the active-roadmap cap, and its detail is an object carrying the
+      // message plus which roadmaps hold the slots. Anything else is a string.
+      const detail = e?.response?.data?.detail;
+      throw new Error(
+        (typeof detail === 'string' ? detail : detail?.message) ?? 'Could not change that roadmap.'
+      );
+    }
     set((s) => ({
       roadmaps: s.roadmaps.map((r) => (r._id === roadmapId ? { ...r, status } : r)),
     }));
+    // Both are keyed off which roadmaps are active: the summary counts them and
+    // the home screen shows one card each. Leaving them stale is what makes a
+    // pause look like it didn't take.
+    get().fetchStats();
+    get().fetchFocus();
   },
 
   stats: null,
@@ -438,8 +455,7 @@ export const useLearningStore = create<LearningState>((set, get) => ({
       set({ checkpoint: { ...data.result, roadmapId } });
     } catch (e: any) {
       set({
-        checkpointError:
-          e?.response?.data?.detail ?? 'Could not load the checkpoint. Try again.',
+        checkpointError: e?.response?.data?.detail ?? 'Could not load the checkpoint. Try again.',
       });
     } finally {
       set({ checkpointLoading: false });
@@ -480,8 +496,7 @@ export const useLearningStore = create<LearningState>((set, get) => ({
       set({ checkpointLoading: false });
     }
   },
-  closeCheckpoint: () =>
-    set({ checkpoint: null, checkpointOutcome: null, checkpointError: '' }),
+  closeCheckpoint: () => set({ checkpoint: null, checkpointOutcome: null, checkpointError: '' }),
 
   selectedTopic: null,
   setSelectedTopic: (topic) => set({ selectedTopic: topic }),
@@ -675,11 +690,16 @@ export const useLearningStore = create<LearningState>((set, get) => ({
 
   digests: [],
   digestsLoading: false,
+  digestsError: '',
   fetchDigests: async (params) => {
-    set({ digestsLoading: true });
+    set({ digestsLoading: true, digestsError: '' });
     try {
       const data = await api.getDigests(params);
       set({ digests: data.result ?? [] });
+    } catch (e: any) {
+      // Every filter tap is a fetch now, so a failure has to land somewhere the
+      // screen can show it rather than as an unhandled rejection.
+      set({ digestsError: e?.response?.data?.detail ?? 'Could not load digests.' });
     } finally {
       set({ digestsLoading: false });
     }
@@ -734,9 +754,7 @@ export const useLearningStore = create<LearningState>((set, get) => ({
       const failed = e?.response?.data?.detail?.quiz_result;
       if (failed) {
         set((s) => ({ digestQuizFailures: { ...s.digestQuizFailures, [digestId]: failed } }));
-        throw new Error(
-          e?.response?.data?.detail?.message ?? 'Not quite — try again.'
-        );
+        throw new Error(e?.response?.data?.detail?.message ?? 'Not quite — try again.');
       }
       throw new Error(e?.response?.data?.detail ?? 'Could not mark that digest.');
     }
@@ -744,10 +762,10 @@ export const useLearningStore = create<LearningState>((set, get) => ({
 
   generatingDigest: false,
   digestError: '',
-  generateNextDigest: async (roadmapId) => {
+  generateNextDigest: async (roadmapId, topicId) => {
     set({ generatingDigest: true, digestError: '' });
     try {
-      const data = await api.generateDigest(roadmapId);
+      const data = await api.generateDigest(roadmapId, topicId);
       const digest: Digest = data.result;
       set((s) => ({
         unreadDigests: [digest, ...s.unreadDigests],

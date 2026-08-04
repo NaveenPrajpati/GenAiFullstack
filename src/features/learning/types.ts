@@ -204,35 +204,53 @@ export type LearningNote = {
   topicTitle?: string | null;
 };
 
+/** Why nothing is coming. Always given rather than left blank, so the home
+ *  screen can explain an empty state instead of just being one. */
+export type BlockedReason =
+  | 'no_roadmap'
+  | 'cap_reached'
+  /** A recall check on an earlier digest hasn't been passed yet. */
+  | 'awaiting_quiz'
+  | 'needs_review'
+  | 'roadmap_complete'
+  | 'digests_off';
+
+/** One active roadmap's slice of the home screen. */
+export type RoadmapFocus = {
+  roadmapId: string;
+  roadmapTitle: string | null;
+  topic: {
+    id: string;
+    title: string;
+    progress_status: ProgressStatus;
+    order: number;
+  } | null;
+  progress: RoadmapProgress;
+  /** Unread digests on this roadmap's current topic. */
+  unread: number;
+  can_generate: boolean;
+  /** What's stopping this roadmap specifically. `digests_off` is mirrored down
+   *  from the account when nothing more specific applies. */
+  blocked_reason: BlockedReason | null;
+};
+
 /**
- * What the learner is working on and when the next digest lands. Every field
- * that can be absent comes with a `blocked_reason`, so the home screen can say
- * *why* nothing is coming rather than showing an empty state.
+ * What the learner is working on and when the next digest lands.
+ *
+ * One entry per *active* roadmap, matching the daily sweep — it digests each of
+ * them, so showing a single "current" roadmap hid queues that were really there.
+ * `next_at` and `cap` sit at the top because the digest schedule is one
+ * per-account setting, not a per-roadmap one.
  */
 export type LearningFocus = {
-  roadmaps: Array<{
-    roadmapId: string | null;
-    roadmapTitle: string | null;
-    topic: {
-      id: string;
-      title: string;
-      progress_status: ProgressStatus;
-      order: number;
-    } | null;
-    progress: RoadmapProgress;
-    unread: number;
-    cap: number;
-    can_generate: boolean;
-    /** ISO timestamp of the next scheduled digest; null when digests are off. */
-    next_at: string | null;
-    blocked_reason:
-      'no_roadmap' | 'cap_reached' | 'needs_review' | 'roadmap_complete' | 'digests_off' | null;
-  }>;
+  roadmaps: RoadmapFocus[];
+  /** Total unread across the roadmaps above. */
   unread: number;
+  /** Max unread digests one topic may accumulate before generation stops. */
   cap: number;
   next_at: string | null;
-  blocked_reason:
-    'no_roadmap' | 'cap_reached' | 'needs_review' | 'roadmap_complete' | 'digests_off' | null;
+  /** Account-level only: 'no_roadmap' | 'digests_off' | null. */
+  blocked_reason: BlockedReason | null;
 };
 
 /** When the learner's stated pace gets them to the end of a roadmap. */
@@ -321,7 +339,16 @@ export type Proposal = {
 
 /** Aggregate progress across every roadmap — the landing screen's summary strip. */
 export type LearningStats = {
-  roadmaps: { total: number; active: number; completed: number };
+  /** `max_active` is the server's cap on how many can run at once — the roadmap
+   *  list shows it and disables resume once the slots are full. `paused` is kept
+   *  apart from archived: only a paused roadmap is a candidate for a free slot. */
+  roadmaps: {
+    total: number;
+    active: number;
+    completed: number;
+    paused: number;
+    max_active: number;
+  };
   topics: { total: number; completed: number; percent: number };
   completed_this_week: number;
   /** Consecutive days ending today with at least one topic completed. */

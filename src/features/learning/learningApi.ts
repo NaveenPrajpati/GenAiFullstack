@@ -1,12 +1,6 @@
 import { BASE_URL } from '@/services/api';
 import http, { authedFetch } from '@/services/http';
-import type {
-  DigestStatus,
-  NoteKind,
-  ProgressStatus,
-  RoadmapStatus,
-  StreamEvent,
-} from './types';
+import type { DigestStatus, NoteKind, ProgressStatus, RoadmapStatus, StreamEvent } from './types';
 
 const LR = `${BASE_URL}/learning`;
 
@@ -159,11 +153,7 @@ export async function submitProgress(body: {
  * POST /topics/:topicId/checkpoint — issue the active-recall check for a topic.
  * Answers are never sent to the client; grading happens server-side.
  */
-export async function startCheckpoint(
-  topicId: string,
-  roadmapId: string,
-  regenerate = false
-) {
+export async function startCheckpoint(topicId: string, roadmapId: string, regenerate = false) {
   const res = await http.post(`/learning/topics/${topicId}/checkpoint`, {
     roadmapId,
     regenerate,
@@ -240,12 +230,17 @@ export async function deleteNote(noteId: string) {
 
 /**
  * GET /digests — recent topic digests.
+ *
  * `{ status: 'unread', active_only: true }` is the catch-up queue.
+ * `roadmapId` and then `topicId` narrow the archive; both are filtered in the
+ * query, so `limit` stays "the newest N of what you asked for".
  */
 export async function getDigests(params?: {
   status?: DigestStatus;
   active_only?: boolean;
   limit?: number;
+  roadmapId?: string;
+  topicId?: string;
 }) {
   const res = await http.get(`/learning/digests`, {
     params: { limit: 20, ...params },
@@ -276,9 +271,9 @@ export async function markDigest(
 
 /** POST /digests/generate — pull the next digest now instead of waiting for the
  *  daily sweep. Declines with 409 if the current topic already has an unread one. */
-export async function generateDigest(roadmapId?: string) {
+export async function generateDigest(roadmapId?: string, topicId?: string) {
   const res = await http.post(`/learning/digests/generate`, null, {
-    params: roadmapId ? { roadmapId } : undefined,
+    params: { roadmapId, topicId },
   });
   return res.data;
 }

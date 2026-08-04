@@ -1,15 +1,100 @@
 import ScreenHeader from '@/components/layout/ScreenHeader';
 import { useLearningStore } from '@/features/learning/store';
-import type { DueReview, LearningStats, Roadmap } from '@/features/learning/types';
+import type { DueReview, LearningStats, Roadmap, RoadmapStatus } from '@/features/learning/types';
 import { isCompleted } from '@/features/learning/types';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback } from 'react';
-import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 function getProgress(roadmap: Roadmap) {
   const total = roadmap.topics.length;
   const completed = roadmap.topics.filter(isCompleted).length;
   return { total, completed, pct: total > 0 ? Math.round((completed / total) * 100) : 0 };
+}
+
+const STATUS_STYLES: Record<RoadmapStatus, { pill: string; text: string }> = {
+  active: { pill: 'bg-green-100', text: 'text-green-700' },
+  paused: { pill: 'bg-amber-100', text: 'text-amber-700' },
+  completed: { pill: 'bg-violet-100', text: 'text-violet-700' },
+  archived: { pill: 'bg-gray-100', text: 'text-gray-500' },
+  draft: { pill: 'bg-gray-100', text: 'text-gray-500' },
+};
+
+/**
+ * The status controls for one roadmap.
+ *
+ * Only `active` roadmaps are drip-fed digests and only they show up on the home
+ * screen, so this row is how a learner decides what they're actually working on.
+ * Resume is disabled — not merely refused on tap — once the slots are full: the
+ * cap is a fact about the account, and finding it out by being told "no" is a
+ * worse way to learn it than seeing it before you reach for the button.
+ */
+function StatusActions({
+  roadmap,
+  slotsFull,
+  busy,
+  onSet,
+}: {
+  roadmap: Roadmap;
+  slotsFull: boolean;
+  busy: boolean;
+  onSet: (status: RoadmapStatus) => void;
+}) {
+  const { status } = roadmap;
+  if (status === 'archived') {
+    return (
+      <View className="flex-row items-center gap-2 border-t border-gray-100 bg-gray-50/60 px-4 py-2.5">
+        <Text className="flex-1 text-[11px] text-gray-400">Archived</Text>
+        <TouchableOpacity
+          onPress={() => onSet('paused')}
+          disabled={busy}
+          className="rounded-lg border border-gray-200 bg-white px-3 py-1.5"
+          activeOpacity={0.7}>
+          <Text className="text-[11px] font-medium text-gray-600">Restore</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const active = status === 'active';
+  const canResume = !active && !slotsFull;
+
+  return (
+    <View className="flex-row items-center gap-2 border-t border-gray-100 bg-gray-50/60 px-4 py-2.5">
+      {active ? (
+        <TouchableOpacity
+          onPress={() => onSet('paused')}
+          disabled={busy}
+          className="flex-1 items-center rounded-lg border border-gray-200 bg-white py-2"
+          activeOpacity={0.7}>
+          <Text className="text-[11px] font-semibold text-gray-600">
+            {busy ? 'Pausing…' : 'Pause'}
+          </Text>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          onPress={() => onSet('active')}
+          disabled={busy || !canResume}
+          className={`flex-1 items-center rounded-lg py-2 ${
+            canResume ? 'bg-violet-600' : 'bg-gray-200'
+          }`}
+          activeOpacity={0.8}>
+          <Text
+            className={`text-[11px] font-semibold ${canResume ? 'text-white' : 'text-gray-400'}`}>
+            {busy ? 'Resuming…' : canResume ? 'Resume' : 'No free slot'}
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      <TouchableOpacity
+        onPress={() => onSet('archived')}
+        disabled={busy}
+        className="rounded-lg border border-gray-200 bg-white px-3 py-2"
+        activeOpacity={0.7}>
+        <Text className="text-[11px] font-medium text-gray-500">Archive</Text>
+      </TouchableOpacity>
+    </View>
+  );
 }
 
 function StatTile({ value, label }: { value: string | number; label: string }) {
@@ -39,7 +124,8 @@ function StatsStrip({ stats }: { stats: LearningStats }) {
       </View>
       <View className="flex-row">
         <StatTile value={`${stats.topics.completed}/${stats.topics.total}`} label="topics done" />
-        <StatTile value={stats.roadmaps.active} label="active roadmaps" />
+        {/* Against the cap, not bare: "2" alone doesn't say whether there's room. */}
+        <StatTile value={`${stats.roadmaps.active}/${stats.roadmaps.max_active}`} label="running" />
         <StatTile value={stats.completed_this_week} label="this week" />
         <StatTile
           value={stats.streak_days > 0 ? `🔥 ${stats.streak_days}` : '—'}
@@ -99,11 +185,14 @@ export default function RoadmapsScreen() {
     roadmapsLoading,
     roadmapsError,
     fetchRoadmaps,
+    setRoadmapStatus,
     stats,
     fetchStats,
     reviews,
     fetchReviews,
   } = useLearningStore();
+  const [statusBusy, setStatusBusy] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState('');
 
   useFocusEffect(
     useCallback(() => {
@@ -115,6 +204,41 @@ export default function RoadmapsScreen() {
       fetchReviews();
     }, [])
   );
+
+  // Counted from the list rather than from stats: this screen is where the
+  // learner is changing them, and the list is what its own writes update.
+  const running = roadmaps.filter((r) => r.status === 'active').length;
+  const maxActive = stats?.roadmaps.max_active ?? running;
+
+  const applyStatus = async (roadmap: Roadmap, status: RoadmapStatus) => {
+    setStatusError('');
+    setStatusBusy(roadmap._id);
+    try {
+      await setRoadmapStatus(roadmap._id, status);
+    } catch (e: any) {
+      setStatusError(e?.message ?? 'Could not change that roadmap.');
+    } finally {
+      setStatusBusy(null);
+    }
+  };
+
+  const handleStatus = (roadmap: Roadmap, status: RoadmapStatus) => {
+    // Archiving is the one that's awkward to undo by accident — it drops the
+    // roadmap out of every list that matters. Pausing and resuming are cheap.
+    if (status !== 'archived') return applyStatus(roadmap, status);
+    Alert.alert(
+      `Archive ${roadmap.title}?`,
+      'It stops getting digests and leaves your roadmap list. You can restore it later.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Archive',
+          style: 'destructive',
+          onPress: () => applyStatus(roadmap, status),
+        },
+      ]
+    );
+  };
 
   return (
     <View className="flex-1 bg-gray-50">
@@ -151,7 +275,15 @@ export default function RoadmapsScreen() {
         />
       )}
 
-      <ScrollView className="flex-1 p-4" contentContainerStyle={{ paddingBottom: 14, flex: 1 }}>
+      {/* No `flex: 1` on the content container: it pins the content to the
+          viewport height, and the list stops scrolling once it outgrows it. */}
+      <ScrollView className="flex-1 p-4" contentContainerStyle={{ paddingBottom: 24 }}>
+        {!!statusError && (
+          <View className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3">
+            <Text className="text-xs text-red-700">{statusError}</Text>
+          </View>
+        )}
+
         {roadmapsLoading && (
           <View className="items-center py-12">
             <ActivityIndicator size="large" />
@@ -180,62 +312,66 @@ export default function RoadmapsScreen() {
 
         {roadmaps.map((roadmap) => {
           const { completed, total, pct } = getProgress(roadmap);
+          const style = STATUS_STYLES[roadmap.status] ?? STATUS_STYLES.draft;
+          // Parked and archived roadmaps stay legible but visibly recede — what
+          // matters at a glance is which ones are actually running.
+          const dimmed = roadmap.status === 'archived' || roadmap.status === 'paused';
           return (
-            <TouchableOpacity
+            <View
               key={roadmap._id}
-              onPress={() => router.push(`/learning/${roadmap._id}`)}
-              className="mb-3 rounded-xl border border-gray-200 bg-white p-4"
-              activeOpacity={0.8}>
-              <View className="mb-1 flex-row items-start justify-between">
-                <Text className="flex-1 pr-2 text-base font-semibold text-gray-900">
-                  {roadmap.title}
-                </Text>
-                <View
-                  className={`rounded-full px-2 py-0.5 ${
-                    roadmap.status === 'completed'
-                      ? 'bg-green-100'
-                      : roadmap.status === 'archived'
-                        ? 'bg-gray-100'
-                        : 'bg-violet-100'
-                  }`}>
-                  <Text
-                    className={`text-xs capitalize ${
-                      roadmap.status === 'completed'
-                        ? 'text-green-700'
-                        : roadmap.status === 'archived'
-                          ? 'text-gray-500'
-                          : 'text-violet-700'
-                    }`}>
-                    {roadmap.status}
+              className={`mb-3 overflow-hidden rounded-xl border border-gray-200 bg-white ${
+                dimmed ? 'opacity-75' : ''
+              }`}>
+              <TouchableOpacity
+                onPress={() => router.push(`/learning/${roadmap._id}`)}
+                className="p-4"
+                activeOpacity={0.8}>
+                <View className="mb-1 flex-row items-start justify-between">
+                  <Text className="flex-1 pr-2 text-base font-semibold text-gray-900">
+                    {roadmap.title}
                   </Text>
+                  <View className={`rounded-full px-2 py-0.5 ${style.pill}`}>
+                    <Text className={`text-xs capitalize ${style.text}`}>{roadmap.status}</Text>
+                  </View>
                 </View>
-              </View>
 
-              <Text className="mb-3 text-sm leading-relaxed text-gray-500" numberOfLines={2}>
-                {roadmap.summary}
-              </Text>
-
-              {/* Progress bar */}
-              <View className="mb-1 h-1.5 overflow-hidden rounded-full bg-gray-100">
-                <View className="h-1.5 rounded-full bg-violet-500" style={{ width: `${pct}%` }} />
-              </View>
-              <View className="flex-row items-center justify-between">
-                <Text className="text-xs text-gray-400">
-                  {completed}/{total} topics
+                <Text className="mb-3 text-sm leading-relaxed text-gray-500" numberOfLines={2}>
+                  {roadmap.summary}
                 </Text>
-                <Text className="text-xs font-semibold text-violet-600">{pct}%</Text>
-              </View>
 
-              {roadmap.stages.length > 0 && (
-                <View className="mt-2 flex-row flex-wrap gap-1">
-                  {roadmap.stages.map((s) => (
-                    <View key={s.id} className="rounded-md bg-blue-50 px-2 py-0.5">
-                      <Text className="text-xs text-blue-600">{s.title}</Text>
-                    </View>
-                  ))}
+                {/* Progress bar */}
+                <View className="mb-1 h-1.5 overflow-hidden rounded-full bg-gray-100">
+                  <View className="h-1.5 rounded-full bg-violet-500" style={{ width: `${pct}%` }} />
                 </View>
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-xs text-gray-400">
+                    {completed}/{total} topics
+                  </Text>
+                  <Text className="text-xs font-semibold text-violet-600">{pct}%</Text>
+                </View>
+
+                {roadmap.stages.length > 0 && (
+                  <View className="mt-2 flex-row flex-wrap gap-1">
+                    {roadmap.stages.map((s) => (
+                      <View key={s.id} className="rounded-md bg-blue-50 px-2 py-0.5">
+                        <Text className="text-xs text-blue-600">{s.title}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              {/* A finished roadmap has nothing left to drip-feed, so pausing and
+                  resuming it would mean nothing — archiving is the only move. */}
+              {roadmap.status !== 'completed' && (
+                <StatusActions
+                  roadmap={roadmap}
+                  slotsFull={running >= maxActive}
+                  busy={statusBusy === roadmap._id}
+                  onSet={(status) => handleStatus(roadmap, status)}
+                />
               )}
-            </TouchableOpacity>
+            </View>
           );
         })}
       </ScrollView>

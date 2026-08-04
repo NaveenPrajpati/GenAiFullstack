@@ -12,12 +12,14 @@ import type {
 } from '@/features/learning/types';
 import { formatMinutes } from '@/features/learning/types';
 import { useGlobalSearchParams, usePathname, useRouter } from 'expo-router';
+import { BotIcon, XIcon } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Linking,
   Platform,
+  Pressable,
   ScrollView,
   Text,
   TextInput,
@@ -457,9 +459,7 @@ function TopicActions({
 export default function ChatBot() {
   const { token } = useAuth();
   const router = useRouter();
-  // GLOBAL, not local: this panel is rendered by the section layout, and
-  // useLocalSearchParams only sees params of the route it is rendered in — from
-  // a layout that's empty.
+  const [openBot, setOpenBot] = useState(false);
   const {
     prefill,
     source,
@@ -578,129 +578,147 @@ export default function ChatBot() {
   };
 
   return (
-    <View
-      className="rounded-xl border border-gray-300 bg-gray-500"
-      style={{ width: isMobile ? width * 0.9 : 400 }}>
-      <View className="border-b border-gray-200 bg-white px-5 py-4">
-        <View className="flex-row items-center justify-between">
-          <View>
-            <Text className="text-base font-bold text-gray-900">AI Tutor</Text>
-            {!!roadmapId && (
-              <Text className="text-xs text-gray-400" numberOfLines={1}>
-                {topic ? topic.title : (roadmapTitle ?? 'Roadmap context active')}
-              </Text>
-            )}
-          </View>
-          <TouchableOpacity
-            onPress={resetChat}
-            className="rounded-lg bg-gray-100 px-3 py-1.5"
-            activeOpacity={0.7}>
-            <Text className="text-xs text-gray-600">New chat</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={headerHeight}
-        style={{ flex: 1 }}>
-        <ScrollView
-          ref={scrollRef}
-          className="flex-1 px-4 pt-4"
-          contentContainerStyle={{ paddingBottom: 8, maxHeight: 400 }}>
-          {chatMessages.length === 0 && (
-            <View className="items-center py-12">
-              <Text className="mb-2 text-5xl">🤖</Text>
-              <Text className="mb-1 text-base font-semibold text-gray-700">AI Learning Tutor</Text>
-              <Text className="text-center text-sm leading-relaxed text-gray-400">
-                {emptyStateHint}
-              </Text>
-            </View>
-          )}
-
-          {chatMessages.map((msg) => (
-            <Bubble
-              key={msg.id}
-              msg={msg}
-              onApprove={handleApprove}
-              onReject={handleReject}
-              onStartQuiz={() => router.push('/learning/quiz')}
-              onOnboard={handleOnboard}
-              onView={handleView}
-              approving={approving}
-            />
-          ))}
-
-          {chatLoading && (
-            <View className="mb-3 items-start">
-              <View className="rounded-2xl rounded-tl-sm bg-gray-100 px-4 py-2.5">
-                <ActivityIndicator size="small" />
+    <>
+      {!openBot && (
+        <Pressable
+          className="rounded-full bg-blue-200 p-2"
+          onPress={() => setOpenBot((pre) => !pre)}>
+          <BotIcon />
+        </Pressable>
+      )}
+      {openBot && (
+        <View
+          className="rounded-xl border border-gray-300 bg-gray-500"
+          style={{ width: isMobile ? width * 0.9 : 400 }}>
+          <View className="border-b border-gray-200 bg-white px-5 py-4">
+            <View className="flex-row items-center justify-between">
+              <View>
+                <Text className="text-base font-bold text-gray-900">AI Tutor</Text>
+                {!!roadmapId && (
+                  <Text className="text-xs text-gray-400" numberOfLines={1}>
+                    {topic ? topic.title : (roadmapTitle ?? 'Roadmap context active')}
+                  </Text>
+                )}
+              </View>
+              <View className="flex-row items-center gap-x-1">
+                <TouchableOpacity
+                  onPress={resetChat}
+                  className="rounded-lg bg-gray-100 px-3 py-1.5"
+                  activeOpacity={0.7}>
+                  <Text className="text-xs text-gray-600">New chat</Text>
+                </TouchableOpacity>
+                <Pressable className="rounded-full p-1" onPress={() => setOpenBot((pre) => !pre)}>
+                  <XIcon />
+                </Pressable>
               </View>
             </View>
-          )}
-
-          {!!approvalError && (
-            <View className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3">
-              <Text className="text-sm text-red-700">{approvalError}</Text>
-            </View>
-          )}
-        </ScrollView>
-
-        {/* Topic shortcuts, only once a topic is selected on the roadmap screen */}
-        {onRoadmapDetail && topic && (
-          <TopicActions
-            topic={topic}
-            roadmapTitle={roadmapTitle}
-            onAsk={handleAsk}
-            disabled={chatLoading}
-          />
-        )}
-
-        {/* Input bar */}
-        <View className="border-t border-gray-200 bg-white px-4 py-3">
-          <View className="flex-row items-end gap-3">
-            <TextInput
-              className="flex-1 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800"
-              style={{ maxHeight: 100 }}
-              placeholder="Ask anything…"
-              placeholderTextColor="#9ca3af"
-              multiline
-              value={input}
-              onChangeText={setInput}
-              // Enter sends, Shift+Enter inserts a newline. The field is
-              // multiline, so Enter would otherwise only ever add a line break.
-              //
-              // Web and native are wired separately on purpose: onKeyPress is
-              // the only one carrying the shift modifier, and letting both fire
-              // would send the message twice on one keystroke.
-              {...(Platform.OS === 'web'
-                ? {
-                    submitBehavior: 'newline' as const,
-                    onKeyPress: (e: any) => {
-                      if (e.nativeEvent?.key === 'Enter' && !e.nativeEvent?.shiftKey) {
-                        e.preventDefault?.();
-                        handleSend();
-                      }
-                    },
-                  }
-                : { submitBehavior: 'submit' as const, onSubmitEditing: handleSend })}
-            />
-            <TouchableOpacity
-              onPress={handleSend}
-              disabled={!input.trim() || chatLoading}
-              className={`h-11 w-11 items-center justify-center rounded-full ${
-                !input.trim() || chatLoading ? 'bg-gray-200' : 'bg-violet-600'
-              }`}
-              activeOpacity={0.8}>
-              {chatLoading ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Text className="text-lg font-bold text-white">↑</Text>
-              )}
-            </TouchableOpacity>
           </View>
+
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={headerHeight}
+            style={{ flex: 1 }}>
+            <ScrollView
+              ref={scrollRef}
+              className="flex-1 px-4 pt-4"
+              contentContainerStyle={{ paddingBottom: 8, maxHeight: 400 }}>
+              {chatMessages.length === 0 && (
+                <View className="items-center py-12">
+                  <Text className="mb-2 text-5xl">🤖</Text>
+                  <Text className="mb-1 text-base font-semibold text-gray-700">
+                    AI Learning Tutor
+                  </Text>
+                  <Text className="text-center text-sm leading-relaxed text-gray-400">
+                    {emptyStateHint}
+                  </Text>
+                </View>
+              )}
+
+              {chatMessages.map((msg) => (
+                <Bubble
+                  key={msg.id}
+                  msg={msg}
+                  onApprove={handleApprove}
+                  onReject={handleReject}
+                  onStartQuiz={() => router.push('/learning/quiz')}
+                  onOnboard={handleOnboard}
+                  onView={handleView}
+                  approving={approving}
+                />
+              ))}
+
+              {chatLoading && (
+                <View className="mb-3 items-start">
+                  <View className="rounded-2xl rounded-tl-sm bg-gray-100 px-4 py-2.5">
+                    <ActivityIndicator size="small" />
+                  </View>
+                </View>
+              )}
+
+              {!!approvalError && (
+                <View className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3">
+                  <Text className="text-sm text-red-700">{approvalError}</Text>
+                </View>
+              )}
+            </ScrollView>
+
+            {/* Topic shortcuts, only once a topic is selected on the roadmap screen */}
+            {onRoadmapDetail && topic && (
+              <TopicActions
+                topic={topic}
+                roadmapTitle={roadmapTitle}
+                onAsk={handleAsk}
+                disabled={chatLoading}
+              />
+            )}
+
+            {/* Input bar */}
+            <View className="border-t border-gray-200 bg-white px-4 py-3">
+              <View className="flex-row items-end gap-3">
+                <TextInput
+                  className="flex-1 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800"
+                  style={{ maxHeight: 100 }}
+                  placeholder="Ask anything…"
+                  placeholderTextColor="#9ca3af"
+                  multiline
+                  value={input}
+                  onChangeText={setInput}
+                  // Enter sends, Shift+Enter inserts a newline. The field is
+                  // multiline, so Enter would otherwise only ever add a line break.
+                  //
+                  // Web and native are wired separately on purpose: onKeyPress is
+                  // the only one carrying the shift modifier, and letting both fire
+                  // would send the message twice on one keystroke.
+                  {...(Platform.OS === 'web'
+                    ? {
+                        submitBehavior: 'newline' as const,
+                        onKeyPress: (e: any) => {
+                          if (e.nativeEvent?.key === 'Enter' && !e.nativeEvent?.shiftKey) {
+                            e.preventDefault?.();
+                            handleSend();
+                          }
+                        },
+                      }
+                    : { submitBehavior: 'submit' as const, onSubmitEditing: handleSend })}
+                />
+                <TouchableOpacity
+                  onPress={handleSend}
+                  disabled={!input.trim() || chatLoading}
+                  className={`h-11 w-11 items-center justify-center rounded-full ${
+                    !input.trim() || chatLoading ? 'bg-gray-200' : 'bg-violet-600'
+                  }`}
+                  activeOpacity={0.8}>
+                  {chatLoading ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <Text className="text-lg font-bold text-white">↑</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
         </View>
-      </KeyboardAvoidingView>
-    </View>
+      )}
+    </>
   );
 }
