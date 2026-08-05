@@ -161,6 +161,10 @@ type LearningState = {
   /** Park, resume, or archive. Rejects with the server's message when resuming
    *  would exceed the active cap, so the caller can show it verbatim. */
   setRoadmapStatus: (roadmapId: string, status: Roadmap['status']) => Promise<void>;
+  /** Delete a roadmap and everything stored against it. Irreversible — the
+   *  caller is responsible for confirming first. Resolves to the number of
+   *  linked to-dos left behind in the personal assistant. */
+  removeRoadmap: (roadmapId: string) => Promise<number>;
 
   stats: LearningStats | null;
   fetchStats: () => Promise<void>;
@@ -352,6 +356,32 @@ export const useLearningStore = create<LearningState>((set, get) => ({
     // pause look like it didn't take.
     get().fetchStats();
     get().fetchFocus();
+  },
+
+  removeRoadmap: async (roadmapId) => {
+    let linked = 0;
+    try {
+      const data = await api.deleteRoadmap(roadmapId);
+      linked = data?.result?.linked_tasks ?? 0;
+    } catch (e: any) {
+      const detail = e?.response?.data?.detail;
+      throw new Error(
+        (typeof detail === 'string' ? detail : detail?.message) ?? 'Could not delete that roadmap.'
+      );
+    }
+    // Drop it locally rather than refetching the list: the row should go the
+    // moment the server confirms, not a round trip later.
+    set((s) => ({
+      roadmaps: s.roadmaps.filter((r) => r._id !== roadmapId),
+      // Its digests went with it server-side; leaving them queued here would
+      // offer the learner tips for a roadmap that no longer exists.
+      unreadDigests: s.unreadDigests.filter((d) => d.roadmapId !== roadmapId),
+      digests: s.digests.filter((d) => d.roadmapId !== roadmapId),
+      reviews: s.reviews.filter((r) => r.roadmapId !== roadmapId),
+    }));
+    get().fetchStats();
+    get().fetchFocus();
+    return linked;
   },
 
   stats: null,

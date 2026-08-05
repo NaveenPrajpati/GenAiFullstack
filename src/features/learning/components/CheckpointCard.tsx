@@ -152,8 +152,7 @@ function CheckpointResult({
       className={`mt-3 rounded-xl border p-4 ${
         passed ? 'border-green-200 bg-green-50' : 'border-orange-200 bg-orange-50'
       }`}>
-      <Text
-        className={`mb-1 text-sm font-bold ${passed ? 'text-green-800' : 'text-orange-800'}`}>
+      <Text className={`mb-1 text-sm font-bold ${passed ? 'text-green-800' : 'text-orange-800'}`}>
         {passed
           ? outcome.was_review
             ? '✓ Still got it'
@@ -180,13 +179,24 @@ function CheckpointResult({
         </Text>
       )}
 
+      {/* On a pass the answers come back and are worth showing. On a failure the
+          server sends the outcome and a hint instead — enough to know what to go
+          over, not enough to copy down and re-enter. */}
       {outcome.review.length > 0 && (
         <View className="mb-3 rounded-lg bg-white p-3">
-          <Text className="mb-1 text-xs font-semibold text-gray-500">Worth another look</Text>
+          <Text className="mb-1 text-xs font-semibold text-gray-500">
+            {passed ? 'Worth another look' : 'Go over these before retrying'}
+          </Text>
           {outcome.review.map((r, i) => (
-            <Text key={i} className="mb-0.5 text-xs text-gray-600">
-              • Q{r.question + 1} — {r.correctOption ?? '—'}
-            </Text>
+            <View key={i} className="mb-1.5">
+              <Text className="text-xs text-gray-700">
+                • Q{r.question + 1}
+                {r.outcome ? ` — ${r.outcome}` : r.correctOption ? ` — ${r.correctOption}` : ''}
+              </Text>
+              {!!r.hint && (
+                <Text className="ml-3 text-[11px] leading-relaxed text-gray-500">{r.hint}</Text>
+              )}
+            </View>
           ))}
         </View>
       )}
@@ -206,8 +216,7 @@ function CheckpointResult({
             passed ? 'bg-green-600' : 'bg-gray-200'
           }`}
           activeOpacity={0.8}>
-          <Text
-            className={`text-sm font-semibold ${passed ? 'text-white' : 'text-gray-700'}`}>
+          <Text className={`text-sm font-semibold ${passed ? 'text-white' : 'text-gray-700'}`}>
             {passed ? 'Continue' : 'Close'}
           </Text>
         </TouchableOpacity>

@@ -13,7 +13,7 @@ export default function LearningLayout() {
     <View className="flex-1">
       <Stack screenOptions={{ headerShown: true, headerBackButtonDisplayMode: 'minimal' }}>
         <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="roadmaps" options={{ headerShown: false }} />
+        <Stack.Screen name="roadmaps" options={{ headerShown: true }} />
         <Stack.Screen name="[id]" options={{ title: 'Roadmap' }} />
         <Stack.Screen name="quiz" />
         <Stack.Screen name="notes" options={{ title: 'My notes' }} />
@@ -22,7 +22,7 @@ export default function LearningLayout() {
       </Stack>
 
       {showChat && (
-        <View className="absolute right-4 bottom-4">
+        <View className="absolute right-8 bottom-8">
           <ChatBot />
         </View>
       )}

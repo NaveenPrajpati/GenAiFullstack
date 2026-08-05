@@ -3,6 +3,7 @@ import { useLearningStore } from '@/features/learning/store';
 import type { DueReview, LearningStats, Roadmap, RoadmapStatus } from '@/features/learning/types';
 import { isCompleted } from '@/features/learning/types';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { SettingsIcon } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
@@ -34,23 +35,54 @@ function StatusActions({
   slotsFull,
   busy,
   onSet,
+  onDelete,
 }: {
   roadmap: Roadmap;
   slotsFull: boolean;
   busy: boolean;
   onSet: (status: RoadmapStatus) => void;
+  onDelete: () => void;
 }) {
   const { status } = roadmap;
+  // Delete sits apart from the status buttons and reads as text, not a button:
+  // it's the one action here that can't be undone, and it shouldn't be the same
+  // size and weight as Pause.
+  const deleteButton = (
+    <TouchableOpacity onPress={onDelete} disabled={busy} className="px-2 py-2" activeOpacity={0.6}>
+      <Text className="text-[11px] font-medium text-red-500">Delete</Text>
+    </TouchableOpacity>
+  );
+
   if (status === 'archived') {
     return (
       <View className="flex-row items-center gap-2 border-t border-gray-100 bg-gray-50/60 px-4 py-2.5">
         <Text className="flex-1 text-[11px] text-gray-400">Archived</Text>
+        {deleteButton}
         <TouchableOpacity
           onPress={() => onSet('paused')}
           disabled={busy}
           className="rounded-lg border border-gray-200 bg-white px-3 py-1.5"
           activeOpacity={0.7}>
           <Text className="text-[11px] font-medium text-gray-600">Restore</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // A finished roadmap has nothing left to drip-feed, so pause and resume would
+  // mean nothing — but it still needs a way out of the list, and deleting one is
+  // the most likely thing a learner wants to do with it.
+  if (status === 'completed') {
+    return (
+      <View className="flex-row items-center gap-2 border-t border-gray-100 bg-gray-50/60 px-4 py-2.5">
+        <Text className="flex-1 text-[11px] text-gray-400">✓ Finished</Text>
+        {deleteButton}
+        <TouchableOpacity
+          onPress={() => onSet('archived')}
+          disabled={busy}
+          className="rounded-lg border border-gray-200 bg-white px-3 py-1.5"
+          activeOpacity={0.7}>
+          <Text className="text-[11px] font-medium text-gray-600">Archive</Text>
         </TouchableOpacity>
       </View>
     );
@@ -93,6 +125,8 @@ function StatusActions({
         activeOpacity={0.7}>
         <Text className="text-[11px] font-medium text-gray-500">Archive</Text>
       </TouchableOpacity>
+
+      {deleteButton}
     </View>
   );
 }
@@ -131,8 +165,11 @@ function StatsStrip({ stats }: { stats: LearningStats }) {
           value={stats.streak_days > 0 ? `🔥 ${stats.streak_days}` : '—'}
           label="day streak"
         />
-        {stats.quizzes.attempts > 0 && (
-          <StatTile value={`${stats.quizzes.average_score}%`} label="quiz avg" />
+        {/* Mastery rather than the lifetime quiz average: the average counts a
+            week-one failure as evidence about today and stops moving once there's
+            any history, so it reads as a fixed property of the learner. */}
+        {stats.mastery?.score !== null && stats.mastery?.score !== undefined && (
+          <StatTile value={`${stats.mastery.score}%`} label="mastery" />
         )}
       </View>
     </View>
@@ -186,6 +223,7 @@ export default function RoadmapsScreen() {
     roadmapsError,
     fetchRoadmaps,
     setRoadmapStatus,
+    removeRoadmap,
     stats,
     fetchStats,
     reviews,
@@ -240,6 +278,50 @@ export default function RoadmapsScreen() {
     );
   };
 
+  const handleDelete = (roadmap: Roadmap) => {
+    const { completed, total } = getProgress(roadmap);
+    // Name what actually goes, and say archiving exists. A learner who wanted to
+    // stop a roadmap rather than erase it shouldn't find that out afterwards —
+    // this is the one action on the screen with nothing behind it.
+    Alert.alert(
+      `Delete ${roadmap.title}?`,
+      `This permanently removes the roadmap, its ${total} topic${total === 1 ? '' : 's'}` +
+        `${completed > 0 ? ` (${completed} completed)` : ''}, and every digest, note, ` +
+        'quiz and score on it. This cannot be undone — archive it instead if you ' +
+        'only want it out of the way.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Archive instead',
+          onPress: () => applyStatus(roadmap, 'archived'),
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setStatusError('');
+            setStatusBusy(roadmap._id);
+            try {
+              const linked = await removeRoadmap(roadmap._id);
+              if (linked > 0) {
+                // They live in the assistant's task list and were left alone on
+                // purpose; saying so beats them turning up unexplained.
+                setStatusError(
+                  `Deleted. ${linked} to-do${linked === 1 ? '' : 's'} from this roadmap ` +
+                    'are still in your task list.'
+                );
+              }
+            } catch (e: any) {
+              setStatusError(e?.message ?? 'Could not delete that roadmap.');
+            } finally {
+              setStatusBusy(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <View className="flex-1 bg-gray-50">
       <ScreenHeader
@@ -247,6 +329,11 @@ export default function RoadmapsScreen() {
         subtitle="Your roadmaps"
         right={
           <>
+            <TouchableOpacity
+              onPress={() => router.replace('/learning')}
+              className="rounded-lg bg-gray-100 px-3 py-2">
+              <Text className="text-xs font-medium text-gray-700">CatchUp</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               onPress={() => router.push('/learning/notes')}
               className="rounded-lg bg-gray-100 px-3 py-2">
@@ -260,7 +347,7 @@ export default function RoadmapsScreen() {
             <TouchableOpacity
               onPress={() => router.push('/learning/settings')}
               className="rounded-lg bg-gray-100 px-3 py-2">
-              <Text className="text-xs font-medium text-gray-700">Settings</Text>
+              <SettingsIcon size={16} />
             </TouchableOpacity>
           </>
         }
@@ -352,8 +439,8 @@ export default function RoadmapsScreen() {
 
                 {roadmap.stages.length > 0 && (
                   <View className="mt-2 flex-row flex-wrap gap-1">
-                    {roadmap.stages.map((s) => (
-                      <View key={s.id} className="rounded-md bg-blue-50 px-2 py-0.5">
+                    {roadmap.stages.map((s, ind) => (
+                      <View key={ind} className="rounded-md bg-blue-50 px-2 py-0.5">
                         <Text className="text-xs text-blue-600">{s.title}</Text>
                       </View>
                     ))}
@@ -361,16 +448,13 @@ export default function RoadmapsScreen() {
                 )}
               </TouchableOpacity>
 
-              {/* A finished roadmap has nothing left to drip-feed, so pausing and
-                  resuming it would mean nothing — archiving is the only move. */}
-              {roadmap.status !== 'completed' && (
-                <StatusActions
-                  roadmap={roadmap}
-                  slotsFull={running >= maxActive}
-                  busy={statusBusy === roadmap._id}
-                  onSet={(status) => handleStatus(roadmap, status)}
-                />
-              )}
+              <StatusActions
+                roadmap={roadmap}
+                slotsFull={running >= maxActive}
+                busy={statusBusy === roadmap._id}
+                onSet={(status) => handleStatus(roadmap, status)}
+                onDelete={() => handleDelete(roadmap)}
+              />
             </View>
           );
         })}

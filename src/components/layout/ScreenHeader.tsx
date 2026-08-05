@@ -4,7 +4,6 @@ import type { ReactNode } from 'react';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
 export default function ScreenHeader({
   title,
   subtitle,
@@ -24,9 +23,9 @@ export default function ScreenHeader({
     <View
       style={[
         styles.container,
-        {
-          paddingTop: insets.top,
-        },
+        // {
+        //   paddingTop: insets.top,
+        // },
       ]}
       className="border-b border-gray-200 bg-white px-5 py-4">
       <View className="flex-row items-center justify-between">

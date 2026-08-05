@@ -4,41 +4,91 @@ import type {
   BlockedReason,
   Digest,
   LearningStats,
+  MasterySummary,
   QuizResult,
   RoadmapFocus,
 } from '@/features/learning/types';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Linking, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
-/**
- * The learning home: what needs attention today.
- *
- * Digests lead because they're time-sensitive, and because acknowledging one is
- * the only signal we get that it landed. The roadmap list lives a tap away at
- * /learning/roadmaps — browsing is the less common intent.
- *
- * Everything scrolls in one list. A learner can have several roadmaps running,
- * so pinning their cards above the scroll view would eat the screen and leave
- * the digest queue in a sliver.
- */
+const TREND_MARK: Record<MasterySummary['trend'], string> = {
+  improving: '↑',
+  slipping: '↓',
+  steady: '→',
+  new: '',
+};
 
 function StatsRow({ stats }: { stats: LearningStats }) {
   if (stats.topics.total === 0) return null;
+  const { mastery } = stats;
   const tiles: [string | number, string][] = [
     [`${stats.topics.completed}/${stats.topics.total}`, 'topics'],
     [stats.streak_days > 0 ? `🔥 ${stats.streak_days}` : '—', 'streak'],
     [stats.completed_this_week, 'this week'],
   ];
+  // Mastery leads the right-hand side once anything has been graded: it answers
+  // "how well do I know this", which none of the counts above do.
+  if (mastery?.score !== null && mastery?.score !== undefined) {
+    tiles.push([`${mastery.score}%${TREND_MARK[mastery.trend]}`, 'mastery']);
+  }
   if (stats.reviews_due > 0) tiles.push([stats.reviews_due, 'to review']);
 
   return (
     <View className="mx-4 mt-3 flex-row rounded-xl border border-gray-200 bg-white p-3">
       {tiles.map(([value, label]) => (
         <View key={label} className="flex-1 items-center">
-          <Text className="text-base font-bold text-gray-900">{value}</Text>
+          <Text
+            className={`text-base font-bold ${
+              label === 'mastery' && mastery.trend === 'slipping'
+                ? 'text-orange-600'
+                : 'text-gray-900'
+            }`}>
+            {value}
+          </Text>
           <Text className="text-[10px] text-gray-400">{label}</Text>
         </View>
+      ))}
+    </View>
+  );
+}
+
+/** The topics holding the mastery number down, and a way into them. Sits with
+ *  the reviews prompt because it answers the same question — what to do next —
+ *  from the other direction: not what's due, but what isn't sticking. */
+function WeakestTopics({ mastery }: { mastery: MasterySummary }) {
+  const router = useRouter();
+  if (mastery.weakest.length === 0 || mastery.score === null) return null;
+  // Everything above this is holding fine; naming a "weakest" topic then would
+  // invent a problem out of the bottom of a healthy spread.
+  const shaky = mastery.weakest.filter((t) => t.mastery < 70);
+  if (shaky.length === 0) return null;
+
+  return (
+    <View className="mb-3 rounded-xl border border-gray-200 bg-white p-3">
+      <Text className="mb-2 text-[10px] font-semibold tracking-wide text-gray-400 uppercase">
+        Not sticking yet
+      </Text>
+      {shaky.map((t) => (
+        <TouchableOpacity
+          key={`${t.roadmapId}:${t.topicId}`}
+          onPress={() => router.push(`/learning/${t.roadmapId}`)}
+          className="mb-1.5 flex-row items-center justify-between"
+          activeOpacity={0.7}>
+          <View className="flex-1 pr-2">
+            <Text className="text-xs font-medium text-gray-800" numberOfLines={1}>
+              {t.title}
+            </Text>
+            <Text className="text-[10px] text-gray-400" numberOfLines={1}>
+              {t.overdue_days > 0
+                ? `review ${t.overdue_days}d overdue`
+                : `${t.attempts} attempt${t.attempts === 1 ? '' : 's'}`}
+              {t.trend === 'slipping' ? ' · slipping' : ''}
+            </Text>
+          </View>
+          <Text className="text-xs font-semibold text-orange-600">{t.mastery}%</Text>
+        </TouchableOpacity>
       ))}
     </View>
   );
@@ -103,12 +153,16 @@ function FocusCard({
   const note: Record<BlockedReason, string> = {
     cap_reached: `${focus.unread} unread on this topic — clear those first.`,
     awaiting_quiz: 'Pass the recall check on an earlier digest to unlock the next one.',
+    needs_revision: "That checkpoint didn't pass — go over the revision tips, then retry.",
     needs_review: "You've covered this topic. Pass its checkpoint to move on.",
     roadmap_complete: 'Every topic is done. Time for a new roadmap.',
     digests_off: 'Daily digests are off — you can still pull one now.',
     no_roadmap: '',
   };
   const review = focus.blocked_reason === 'needs_review';
+  // A failed checkpoint owes revision before a retry, so the action here is to
+  // fetch those tips — offering "Take the checkpoint" would just be refused.
+  const revising = focus.blocked_reason === 'needs_revision';
 
   return (
     <View className="mb-3 overflow-hidden rounded-2xl border border-gray-200 bg-white">
@@ -128,10 +182,12 @@ function FocusCard({
         {!!focus.topic && (
           <View className="mt-1 flex-row items-center gap-1.5">
             <View
-              className={`h-1.5 w-1.5 rounded-full ${review ? 'bg-amber-500' : 'bg-green-500'}`}
+              className={`h-1.5 w-1.5 rounded-full ${
+                revising ? 'bg-red-500' : review ? 'bg-amber-500' : 'bg-green-500'
+              }`}
             />
             <Text className="flex-1 text-xs text-gray-500" numberOfLines={1}>
-              {review ? 'Ready for checkpoint: ' : 'Now on: '}
+              {revising ? 'Revising: ' : review ? 'Ready for checkpoint: ' : 'Now on: '}
               <Text className="font-medium text-gray-800">{focus.topic.title}</Text>
             </Text>
           </View>
@@ -178,7 +234,11 @@ function FocusCard({
                 className={`text-xs font-semibold ${
                   focus.can_generate ? 'text-violet-700' : 'text-gray-400'
                 }`}>
-                Generate digest
+                {revising
+                  ? focus.can_generate
+                    ? 'Get revision tips'
+                    : 'Revision tips waiting'
+                  : 'Generate digest'}
               </Text>
             )}
           </TouchableOpacity>
@@ -437,113 +497,123 @@ export default function LearningHome() {
   const parked = stats?.roadmaps.paused ?? 0;
 
   return (
-    <View className="flex-1 bg-gray-50">
-      <ScreenHeader
-        title="Today"
-        subtitle={caughtUp ? "You're all caught up" : `${unreadDigests.length} to catch up on`}
-        right={
-          <>
-            <TouchableOpacity
-              onPress={() => router.push('/learning/roadmaps')}
-              className="rounded-lg bg-gray-100 px-3 py-2">
-              <Text className="text-xs font-medium text-gray-700">Roadmaps</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => router.push('/learning/notes')}
-              className="rounded-lg bg-gray-100 px-3 py-2">
-              <Text className="text-xs font-medium text-gray-700">Notes</Text>
-            </TouchableOpacity>
-          </>
-        }
-      />
-
-      {!!stats && <StatsRow stats={stats} />}
-
-      <ScrollView className="flex-1 p-4" contentContainerStyle={{ paddingBottom: 32 }}>
-        {!!error && (
-          <View className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3">
-            <Text className="text-xs text-red-700">{error}</Text>
-          </View>
-        )}
-
-        {!!focus && (
-          <>
-            {/* The schedule is one account-wide setting, so it's stated once
-                here rather than repeated on every card. */}
-            <View className="mb-2 flex-row items-baseline justify-between">
-              <Text className="text-xs font-semibold tracking-wide text-gray-400 uppercase">
-                {running > 0 ? `Running · ${running} of ${maxActive}` : 'Roadmaps'}
-              </Text>
-              <Text className="text-[11px] text-gray-400">
-                {focus.next_at ? `Next digest ${untilNext(focus.next_at)}` : 'No digest scheduled'}
-              </Text>
-            </View>
-
-            {focus.roadmaps.length === 0 ? (
-              <NoActiveRoadmaps hasRoadmaps={(stats?.roadmaps.total ?? 0) > 0} />
-            ) : (
-              focus.roadmaps.map((item) => (
-                <FocusCard
-                  key={item.roadmapId}
-                  focus={item}
-                  onGenerate={() => handleGenerate(item.roadmapId, item.topic?.id)}
-                  generating={generatingFor === item.roadmapId}
-                />
-              ))
-            )}
-
-            {/* A free slot is only worth mentioning once there's something to
-                put in it. */}
-            {running < maxActive && parked > 0 && (
+    <SafeAreaView edges={['top']} style={{ flex: 1 }}>
+      <View className="flex-1 bg-gray-50">
+        <ScreenHeader
+          title="Today"
+          subtitle={caughtUp ? "You're all caught up" : `${unreadDigests.length} to catch up on`}
+          right={
+            <>
               <TouchableOpacity
                 onPress={() => router.push('/learning/roadmaps')}
-                className="mb-3 flex-row items-center justify-between rounded-xl border border-dashed border-violet-200 bg-violet-50 px-3 py-2.5"
-                activeOpacity={0.8}>
-                <Text className="flex-1 text-xs text-violet-700" numberOfLines={1}>
-                  {maxActive - running === 1 ? '1 free slot' : `${maxActive - running} free slots`}{' '}
-                  — resume a paused roadmap
-                </Text>
-                <Text className="text-violet-400">→</Text>
+                className="rounded-lg bg-gray-100 px-3 py-2">
+                <Text className="text-xs font-medium text-gray-700">Roadmaps</Text>
               </TouchableOpacity>
-            )}
-          </>
-        )}
+              <TouchableOpacity
+                onPress={() => router.push('/learning/notes')}
+                className="rounded-lg bg-gray-100 px-3 py-2">
+                <Text className="text-xs font-medium text-gray-700">Notes</Text>
+              </TouchableOpacity>
+            </>
+          }
+        />
 
-        {reviews.length > 0 && (
-          <TouchableOpacity
-            onPress={() => router.push(`/learning/${reviews[0].roadmapId}`)}
-            className="mb-3 flex-row items-center justify-between rounded-xl border border-amber-200 bg-amber-50 p-3"
-            activeOpacity={0.8}>
-            <Text className="flex-1 text-xs text-amber-800" numberOfLines={1}>
-              🔁 {reviews.length} {reviews.length === 1 ? 'topic' : 'topics'} due for review
+        {!!stats && <StatsRow stats={stats} />}
+
+        <ScrollView className="flex-1 p-4" contentContainerStyle={{ paddingBottom: 32 }}>
+          {!!error && (
+            <View className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3">
+              <Text className="text-xs text-red-700">{error}</Text>
+            </View>
+          )}
+
+          {!!focus && (
+            <>
+              {/* The schedule is one account-wide setting, so it's stated once
+                here rather than repeated on every card. */}
+              <View className="mb-2 flex-row items-baseline justify-between">
+                <Text className="text-xs font-semibold tracking-wide text-gray-400 uppercase">
+                  {running > 0 ? `Running · ${running} of ${maxActive}` : 'Roadmaps'}
+                </Text>
+                <Text className="text-[11px] text-gray-400">
+                  {focus.next_at
+                    ? `Next digest ${untilNext(focus.next_at)}`
+                    : 'No digest scheduled'}
+                </Text>
+              </View>
+
+              {focus.roadmaps.length === 0 ? (
+                <NoActiveRoadmaps hasRoadmaps={(stats?.roadmaps.total ?? 0) > 0} />
+              ) : (
+                focus.roadmaps.map((item) => (
+                  <FocusCard
+                    key={item.roadmapId}
+                    focus={item}
+                    onGenerate={() => handleGenerate(item.roadmapId, item.topic?.id)}
+                    generating={generatingFor === item.roadmapId}
+                  />
+                ))
+              )}
+
+              {/* A free slot is only worth mentioning once there's something to
+                put in it. */}
+              {running < maxActive && parked > 0 && (
+                <TouchableOpacity
+                  onPress={() => router.push('/learning/roadmaps')}
+                  className="mb-3 flex-row items-center justify-between rounded-xl border border-dashed border-violet-200 bg-violet-50 px-3 py-2.5"
+                  activeOpacity={0.8}>
+                  <Text className="flex-1 text-xs text-violet-700" numberOfLines={1}>
+                    {maxActive - running === 1
+                      ? '1 free slot'
+                      : `${maxActive - running} free slots`}{' '}
+                    — resume a paused roadmap
+                  </Text>
+                  <Text className="text-violet-400">→</Text>
+                </TouchableOpacity>
+              )}
+            </>
+          )}
+
+          {reviews.length > 0 && (
+            <TouchableOpacity
+              onPress={() => router.push(`/learning/${reviews[0].roadmapId}`)}
+              className="mb-3 flex-row items-center justify-between rounded-xl border border-amber-200 bg-amber-50 p-3"
+              activeOpacity={0.8}>
+              <Text className="flex-1 text-xs text-amber-800" numberOfLines={1}>
+                🔁 {reviews.length} {reviews.length === 1 ? 'topic' : 'topics'} due for review
+              </Text>
+              <Text className="text-amber-400">→</Text>
+            </TouchableOpacity>
+          )}
+
+          {!!stats?.mastery && <WeakestTopics mastery={stats.mastery} />}
+
+          {!caughtUp && (
+            <Text className="mt-1 mb-2 text-xs font-semibold tracking-wide text-gray-400 uppercase">
+              To catch up on
             </Text>
-            <Text className="text-amber-400">→</Text>
-          </TouchableOpacity>
-        )}
+          )}
 
-        {!caughtUp && (
-          <Text className="mt-1 mb-2 text-xs font-semibold tracking-wide text-gray-400 uppercase">
-            To catch up on
-          </Text>
-        )}
+          {unreadDigests.map((d) => (
+            <DigestCard
+              key={d._id}
+              digest={d}
+              failure={digestQuizFailures[d._id]}
+              busy={busy === d._id}
+              onMark={(answers, next) => handleMark(d, answers, next)}
+            />
+          ))}
 
-        {unreadDigests.map((d) => (
-          <DigestCard
-            key={d._id}
-            digest={d}
-            failure={digestQuizFailures[d._id]}
-            busy={busy === d._id}
-            onMark={(answers, next) => handleMark(d, answers, next)}
-          />
-        ))}
-
-        {/* No big empty state: the cards above already say what's underway and
+          {/* No big empty state: the cards above already say what's underway and
             when the next digest lands, which is the useful answer to an empty
             queue. */}
-        {caughtUp && running > 0 && (
-          <Text className="py-6 text-center text-xs text-gray-400">✨ Nothing to catch up on</Text>
-        )}
-      </ScrollView>
-    </View>
+          {caughtUp && running > 0 && (
+            <Text className="py-6 text-center text-xs text-gray-400">
+              ✨ Nothing to catch up on
+            </Text>
+          )}
+        </ScrollView>
+      </View>
+    </SafeAreaView>
   );
 }

@@ -112,8 +112,14 @@ export type Digest = {
   resources: { title: string; url: string }[];
   /** Acknowledging a digest is the only signal that it actually landed. */
   status: DigestStatus;
-  /** 1-based position in the drip-feed for this topic. */
-  sequence?: number;
+  /** 1-based position in the drip-feed for this topic. Null on a revision
+   *  digest — revising doesn't advance the drip-feed. */
+  sequence?: number | null;
+  /** `revision` is written after a failed checkpoint, against the questions that
+   *  were missed. Absent on the ordinary teaching digests. */
+  kind?: 'revision';
+  /** The questions missed on the failed attempt this revision digest answers. */
+  weak_points?: string[];
   /** Recall check over EARLIER digests. Must be passed to mark this one.
    *  Null on the first digest of a topic — nothing to recall yet. */
   quizId?: string | null;
@@ -173,12 +179,43 @@ export type QuizResult = {
   total: number;
   correct: number;
   score: number;
+  /**
+   * Only what the learner is allowed to see. On a passed checkpoint the answers
+   * come back; on a failed one they are ABSENT — not null — and `outcome`/`hint`
+   * take their place, so a retry can't be answered by transcription. Treat the
+   * answer fields as optional and never assume a failure carries them.
+   */
   review: {
     question: number;
     selected: number | null;
-    correctAnswer: number;
-    correctOption: string | null;
+    correctAnswer?: number;
+    correctOption?: string | null;
+    /** What the question was testing. Sent in place of the answer on a failure. */
+    outcome?: string | null;
+    /** A nudge toward the material, deliberately not the answer. */
+    hint?: string | null;
   }[];
+  /** False when answers were withheld because the attempt didn't pass. */
+  answers_revealed?: boolean;
+};
+
+/** A recurring misunderstanding inferred from a learner's wrong answers across
+ *  digest checks, checkpoints and reviews. `probe` is server-side only — it
+ *  describes how the next question will catch this, so the learner never sees it. */
+export type Misconception = {
+  label: string;
+  detail: string;
+  evidence: number[];
+};
+
+export type MisconceptionReport = {
+  roadmapId: string;
+  topicId: string;
+  roadmapTitle?: string | null;
+  topicTitle?: string | null;
+  patterns: Misconception[];
+  misses_analyzed: number;
+  updatedAt?: string;
 };
 
 /**
@@ -211,6 +248,8 @@ export type BlockedReason =
   | 'cap_reached'
   /** A recall check on an earlier digest hasn't been passed yet. */
   | 'awaiting_quiz'
+  /** A checkpoint was failed; the revision digest has to be read before a retry. */
+  | 'needs_revision'
   | 'needs_review'
   | 'roadmap_complete'
   | 'digests_off';
@@ -355,7 +394,39 @@ export type LearningStats = {
   streak_days: number;
   /** Completed topics whose spaced-repetition review has come due. */
   reviews_due: number;
+  /** Lifetime mean across every attempt ever. Kept for shipped clients, but
+   *  `mastery` is the signal worth showing — this one barely moves once there's
+   *  any history, and counts week-one failures as evidence about today. */
   quizzes: { attempts: number; average_score: number };
+  mastery: MasterySummary;
+};
+
+/** How well a topic is actually held right now. `score` is an age-weighted mean
+ *  of its attempts; `retention` decays once the scheduled review is overdue; and
+ *  `mastery` is the two combined — the number worth showing. */
+export type TopicMastery = {
+  roadmapId: string;
+  roadmapTitle?: string | null;
+  topicId: string;
+  title?: string | null;
+  score: number;
+  retention: number;
+  mastery: number;
+  trend: 'improving' | 'steady' | 'slipping' | 'new';
+  /** Newest attempt vs the weighted mean of the ones before it. */
+  delta: number;
+  attempts: number;
+  overdue_days: number;
+};
+
+export type MasterySummary = {
+  /** Null when nothing has been graded yet — which is not the same as zero. */
+  score: number | null;
+  trend: 'improving' | 'steady' | 'slipping' | 'new';
+  delta: number;
+  topics_scored: number;
+  /** Up to three, weakest first — what to actually do about it. */
+  weakest: TopicMastery[];
 };
 
 /**

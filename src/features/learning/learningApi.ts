@@ -119,6 +119,19 @@ export async function updateRoadmapStatus(roadmapId: string, status: RoadmapStat
   return res.data;
 }
 
+/**
+ * DELETE /roadmaps/:id — remove a roadmap and everything stored against it:
+ * digests, notes, quizzes, graded attempts, misconception analysis.
+ *
+ * Irreversible. `updateRoadmapStatus(id, 'archived')` is the reversible way to
+ * put a roadmap down. Linked to-dos in the personal assistant are left alone and
+ * come back as `result.linked_tasks`.
+ */
+export async function deleteRoadmap(roadmapId: string) {
+  const res = await http.delete(`/learning/roadmaps/${roadmapId}`);
+  return res.data;
+}
+
 /** GET /focus — what's underway and when the next digest is due. */
 export async function getFocus() {
   const res = await http.get(`/learning/focus`);
@@ -167,6 +180,18 @@ export async function submitCheckpoint(
   answers: { question: number; answer: number }[]
 ) {
   const res = await http.post(`/learning/checkpoint/submit`, { quizId, answers });
+  return res.data;
+}
+
+/**
+ * GET /misconceptions — recurring mistakes inferred from the learner's wrong
+ * answers across digest checks, checkpoints and reviews. Cached server-side;
+ * the analysis runs after each graded attempt, never on this request.
+ */
+export async function getMisconceptions(roadmapId?: string) {
+  const res = await http.get(`/learning/misconceptions`, {
+    params: roadmapId ? { roadmapId } : undefined,
+  });
   return res.data;
 }
 
