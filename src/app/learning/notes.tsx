@@ -1,11 +1,12 @@
 import ScreenHeader from '@/components/ui/ScreenHeader';
-import SectionNav from '@/components/ui/SectionNav';
+import SectionNav, { useWideNav } from '@/components/ui/SectionNav';
 import { NOTE_KINDS, NoteRow } from '@/features/learning/components/Notes';
 import { useLearningStore } from '@/features/learning/store';
 import type { NoteKind } from '@/features/learning/types';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 /**
  * Everything the learner has written, across every roadmap — the reason to come
@@ -27,12 +28,14 @@ export default function NotesScreen() {
   const open = notes.filter((n) => n.kind === 'question' && !n.resolved);
   const rest = notes.filter((n) => !(n.kind === 'question' && !n.resolved));
 
+  const wide = useWideNav();
+
   return (
-    <View className="bg-bg flex-1">
+    <SafeAreaView edges={['top']} style={{ flex: 1 }} className="bg-bg">
       <ScreenHeader
         title="My notes"
         subtitle={`${notes.length} saved across your roadmaps`}
-        showMenu={false}>
+        showMenu={!wide}>
         <SectionNav />
 
         {/* Kind filters are a second, narrower axis than the section nav, so they
@@ -132,6 +135,6 @@ export default function NotesScreen() {
           </View>
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }

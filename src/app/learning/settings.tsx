@@ -1,5 +1,5 @@
 import ScreenHeader from '@/components/ui/ScreenHeader';
-import SectionNav from '@/components/ui/SectionNav';
+import SectionNav, { useWideNav } from '@/components/ui/SectionNav';
 import { useLearningStore } from '@/features/learning/store';
 import type { Difficulty, Memory } from '@/features/learning/types';
 import { useEffect, useState } from 'react';
@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const arrToStr = (a?: string[]) => (a ?? []).join(', ');
 const strToArr = (s: string) =>
@@ -172,12 +173,14 @@ export default function SettingsScreen() {
   const setField = (key: keyof FormState) => (value: string) =>
     setForm((f) => ({ ...f, [key]: value }));
 
+  const wide = useWideNav();
+
   return (
-    <View className="bg-bg flex-1">
+    <SafeAreaView edges={['top']} style={{ flex: 1 }} className="bg-bg">
       <ScreenHeader
         title="Settings"
         subtitle="Personalize your learning experience"
-        showMenu={false}>
+        showMenu={!wide}>
         <SectionNav />
       </ScreenHeader>
 
@@ -401,6 +404,6 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }

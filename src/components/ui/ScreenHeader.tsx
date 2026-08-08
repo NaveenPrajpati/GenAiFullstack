@@ -1,6 +1,6 @@
 import { DrawerActions } from '@react-navigation/native';
-import { useNavigation } from 'expo-router';
-import { MenuIcon } from 'lucide-react-native';
+import { useNavigation, useRouter } from 'expo-router';
+import { ChevronLeftIcon, MenuIcon } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { PageBody } from './Page';
@@ -13,6 +13,7 @@ export default function ScreenHeader({
   children,
   actions,
   showMenu = true,
+  back = false,
 }: {
   title: string;
   subtitle?: ReactNode;
@@ -23,25 +24,43 @@ export default function ScreenHeader({
   /** A nav row or chip strip, laid out under the title. */
   children?: ReactNode;
   showMenu?: boolean;
+  /**
+   * Drill-down screens (a roadmap, a quiz) set this instead of `showMenu`. With
+   * the stack's native headers switched off, nothing else on the screen goes
+   * back — so a screen you can only arrive at by pushing must say so itself.
+   */
+  back?: boolean;
 }) {
   const navigation = useNavigation();
+  const router = useRouter();
   const colors = useColors();
 
   return (
     <PageBody className="pt-3 pb-2 md:pt-5">
       <View className="flex-row items-center gap-3">
-        {/* The drawer is this app's only navigation, and the learning stack hides
-            the native header — without this button there is no way into it on
-            web, and only an undiscoverable edge-swipe on a phone. */}
-        {showMenu && (
+        {back ? (
           <TouchableOpacity
-            onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
+            onPress={() => router.back()}
             className="bg-surface-alt h-10 w-10 items-center justify-center rounded-xl"
             activeOpacity={0.7}
             accessibilityRole="button"
-            accessibilityLabel="Open menu">
-            <MenuIcon size={18} color={colors.inkSoft} />
+            accessibilityLabel="Go back">
+            <ChevronLeftIcon size={20} color={colors.inkSoft} />
           </TouchableOpacity>
+        ) : (
+          // The drawer is the app's top-level navigation, and nothing else opens
+          // it on a narrow screen — the sidebar that replaces this above the
+          // breakpoint carries its own opener.
+          showMenu && (
+            <TouchableOpacity
+              onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
+              className="bg-surface-alt h-10 w-10 items-center justify-center rounded-xl"
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Open menu">
+              <MenuIcon size={18} color={colors.inkSoft} />
+            </TouchableOpacity>
+          )
         )}
 
         <View className="flex-1">

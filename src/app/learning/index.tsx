@@ -489,6 +489,7 @@ export default function LearningHome() {
         setError("Nothing new to send yet — you're up to date on that topic.");
       }
       fetchStats();
+      fetchFocus();
     } catch (e: any) {
       setError(e?.message ?? 'Could not mark that digest.');
     } finally {

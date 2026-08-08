@@ -4,7 +4,7 @@ import { Card, DashedCard } from '@/components/ui/Card';
 import { PageBody } from '@/components/ui/Page';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import ScreenHeader from '@/components/ui/ScreenHeader';
-import SectionNav from '@/components/ui/SectionNav';
+import SectionNav, { useWideNav } from '@/components/ui/SectionNav';
 import { StatsGrid, type Stat } from '@/components/ui/StatTile';
 import { useColors } from '@/components/ui/theme';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
@@ -229,6 +229,7 @@ export default function RoadmapsScreen() {
   const [statusBusy, setStatusBusy] = useState<string | null>(null);
   const [statusError, setStatusError] = useState('');
   const colors = useColors();
+  const wide = useWideNav();
 
   useFocusEffect(
     useCallback(() => {
@@ -323,12 +324,13 @@ export default function RoadmapsScreen() {
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.bg }}>
       <View className="bg-bg flex-1">
-        {/* No menu button: unlike Today, this screen sits inside the stack and
-          already has a native back arrow above it. */}
+        {/* Narrow screens reach the drawer through here — the stack's native
+            header is off, and the sidebar that would carry it isn't rendered
+            below the breakpoint. */}
         <ScreenHeader
           title="Learning"
           subtitle="Your roadmaps"
-          showMenu={false}
+          showMenu={!wide}
           actions={<ThemeToggle />}>
           <SectionNav />
         </ScreenHeader>

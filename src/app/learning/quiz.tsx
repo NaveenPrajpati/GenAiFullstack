@@ -2,6 +2,7 @@ import { useLearningStore } from '@/features/learning/store';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function QuizScreen() {
   const router = useRouter();
@@ -62,15 +63,16 @@ export default function QuizScreen() {
   };
 
   return (
-    <View className="flex-1 bg-gray-50">
-      {/* Header */}
-      <View className="border-b border-gray-200 bg-white px-5 py-4">
+    <SafeAreaView edges={['top']} style={{ flex: 1 }} className="bg-bg">
+      {/* Closing has to clear the active quiz as well as pop the screen, so this
+          keeps its own control rather than using ScreenHeader's plain `back`. */}
+      <View className="border-line bg-surface border-b px-5 py-4">
         <View className="flex-row items-center justify-between">
-          <TouchableOpacity onPress={handleClose}>
-            <Text className="text-sm text-violet-600">← Close</Text>
+          <TouchableOpacity onPress={handleClose} accessibilityRole="button">
+            <Text className="text-primary text-[15px] font-semibold">← Close</Text>
           </TouchableOpacity>
-          <Text className="text-base font-bold text-gray-900">Quiz</Text>
-          <Text className="text-xs text-gray-400">
+          <Text className="text-ink text-[17px] font-bold">Quiz</Text>
+          <Text className="text-ink-faint text-[13px]">
             {answered}/{questions.length}
           </Text>
         </View>
@@ -183,6 +185,6 @@ export default function QuizScreen() {
           </TouchableOpacity>
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }

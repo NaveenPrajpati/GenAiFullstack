@@ -1,11 +1,17 @@
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { PageBody } from '@/components/ui/Page';
+import { ProgressBar } from '@/components/ui/ProgressBar';
+import ScreenHeader from '@/components/ui/ScreenHeader';
 import { useColors } from '@/components/ui/theme';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { CheckpointCard } from '@/features/learning/components/CheckpointCard';
 import { NoteComposer, NoteRow } from '@/features/learning/components/Notes';
 import { useLearningStore } from '@/features/learning/store';
 import type { Roadmap, RoadmapInsights, TopicNode } from '@/features/learning/types';
 import { formatMinutes, isCompleted } from '@/features/learning/types';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Clock } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -67,42 +73,34 @@ function PersonalizationPanel({
   if (!forecast && applied.length === 0 && profile_changes.length === 0) return null;
 
   return (
-    <View className="mt-3">
+    <View className="border-line mt-3 border-t pt-3">
       {!!forecast && (
-        <View className="flex-row items-center gap-x-1">
-          <Text className="text-xs text-gray-500">
-            At {forecast.minutes_per_day} min/day ·{' '}
-            <Text className="font-semibold text-gray-700">
-              {forecast.calendar_days <= 10 ? `${forecast.calendar_days} days` : `~${weeks} weeks`}
-            </Text>{' '}
-            · done by {targetDate}
-          </Text>
-        </View>
+        <Text className="text-ink-soft text-[13px]">
+          At {forecast.minutes_per_day} min/day ·{' '}
+          <Text className="text-ink font-semibold">
+            {forecast.calendar_days <= 10 ? `${forecast.calendar_days} days` : `~${weeks} weeks`}
+          </Text>{' '}
+          · done by {targetDate}
+        </Text>
       )}
       {forecast?.on_track === false && (
-        <Text className="mt-0.5 text-xs text-orange-600">
+        <Text className="text-warning mt-0.5 text-[13px]">
           That&apos;s past your target date — more time per day, or a shorter roadmap, would close
           the gap.
         </Text>
       )}
 
       {applied.length > 0 && (
-        <TouchableOpacity
-          onPress={() => setOpen((o) => !o)}
-          className="mt-2 self-start rounded-full bg-violet-50 px-2.5 py-1"
-          activeOpacity={0.7}>
-          <Text className="text-[11px] font-medium text-violet-700">
-            ✨ Personalized for you {open ? '▲' : '▼'}
+        <TouchableOpacity onPress={() => setOpen((o) => !o)} activeOpacity={0.7} className="mt-2">
+          <Text className="text-primary text-[13px] font-semibold">
+            ✨ Personalized for you {open ? '▴' : '▾'}
           </Text>
         </TouchableOpacity>
       )}
       {open && (
-        <View className="mt-1.5 rounded-lg bg-gray-50 p-2.5">
-          <Text className="mb-1 text-[10px] font-semibold text-gray-400 uppercase">
-            Built from your profile
-          </Text>
+        <View className="bg-surface-alt mt-2 rounded-xl p-3">
           {applied.map((line) => (
-            <Text key={line} className="text-xs text-gray-600">
+            <Text key={line} className="text-ink-soft text-[13px]">
               • {line}
             </Text>
           ))}
@@ -110,17 +108,12 @@ function PersonalizationPanel({
       )}
 
       {profile_changes.length > 0 && (
-        <View className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-2.5">
-          <Text className="mb-1.5 text-xs text-amber-800">
+        <View className="border-warning bg-warning-soft mt-3 rounded-xl border p-3">
+          <Text className="text-ink-soft mb-2 text-[13px]">
             Your profile changed since this was built (
             {profile_changes.map((f) => (FIELD_LABELS[f] ?? f).toLowerCase()).join(', ')}).
           </Text>
-          <TouchableOpacity
-            onPress={() => onRetune(retunePrompt())}
-            className="self-start rounded-lg bg-amber-500 px-3 py-1.5"
-            activeOpacity={0.8}>
-            <Text className="text-xs font-semibold text-white">Update this roadmap</Text>
-          </TouchableOpacity>
+          <Button label="Update this roadmap" size="sm" onPress={() => onRetune(retunePrompt())} />
         </View>
       )}
     </View>
@@ -146,6 +139,54 @@ function groupByStages(roadmap: Roadmap) {
   return groups.filter((g) => g.topics.length > 0);
 }
 
+/**
+ * The rail down the left of the topic list: one dot per topic, joined by a line.
+ *
+ * The dot is also the completion control, which is why it carries a hit slop far
+ * larger than it looks — at 20px across it was easy to miss entirely, and that
+ * made the tracker look like it had no way to record anything.
+ */
+function TopicDot({
+  done,
+  ready,
+  started,
+  last,
+  label,
+  onPress,
+}: {
+  done: boolean;
+  ready: boolean;
+  started: boolean;
+  last: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  const ring = done
+    ? 'border-success bg-success'
+    : ready
+      ? 'border-warning bg-warning'
+      : started
+        ? 'border-primary bg-primary'
+        : 'border-line bg-surface';
+
+  return (
+    <View className="w-7 items-center">
+      <TouchableOpacity
+        onPress={onPress}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: done }}
+        accessibilityLabel={label}
+        className={`mt-1.5 h-4 w-4 items-center justify-center rounded-full border-2 ${ring}`}>
+        {done && <Text className="text-on-primary text-[9px] font-bold">✓</Text>}
+      </TouchableOpacity>
+      {/* Drawn only between dots, so the rail stops at the last topic instead of
+          trailing off under the next stage heading. */}
+      {!last && <View className="bg-line w-px flex-1" />}
+    </View>
+  );
+}
+
 export default function RoadmapDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -154,7 +195,6 @@ export default function RoadmapDetail() {
     roadmapsLoading,
     fetchRoadmaps,
     submitProgress,
-    selectedTopic,
     setSelectedTopic,
     checkpoint,
     checkpointLoading,
@@ -175,6 +215,9 @@ export default function RoadmapDetail() {
   } = useLearningStore();
   const [progressError, setProgressError] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  /** Stages the learner has folded away by hand. Finished ones start folded — see
+   *  `stageCollapsed` — so this only records deliberate overrides. */
+  const [stageToggles, setStageToggles] = useState<Record<string, boolean>>({});
   /** Transient "what just happened" line, so completing a topic visibly does
    *  something beyond a checkbox quietly filling in. */
   const [justFinished, setJustFinished] = useState('');
@@ -205,19 +248,17 @@ export default function RoadmapDetail() {
 
   if (roadmapsLoading && !roadmap) {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-50">
-        <ActivityIndicator size="large" />
+      <View className="bg-bg flex-1 items-center justify-center">
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
   if (!roadmap) {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-50 p-6">
-        <Text className="mb-4 text-base text-gray-500">Roadmap not found.</Text>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text className="text-sm font-medium text-violet-600">Go back</Text>
-        </TouchableOpacity>
+      <View className="bg-bg flex-1 items-center justify-center p-6">
+        <Text className="text-ink-soft mb-4 text-[15px]">Roadmap not found.</Text>
+        <Button label="Go back" variant="secondary" onPress={() => router.back()} />
       </View>
     );
   }
@@ -229,6 +270,10 @@ export default function RoadmapDetail() {
   const nextTopic = [...roadmap.topics]
     .sort((a, b) => a.order - b.order)
     .find((t) => !isCompleted(t) && t.progress_status !== 'skipped');
+
+  /** A finished stage folds itself away — its rows are all struck through and
+   *  none of them is the next thing to do — until the learner says otherwise. */
+  const stageCollapsed = (groupId: string, allDone: boolean) => stageToggles[groupId] ?? allDone;
 
   /** Opens one topic's notes, loading that topic's notes on first expand. */
   const toggleNotes = (topicId: string) => {
@@ -320,364 +365,342 @@ export default function RoadmapDetail() {
     if (y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(y - 80, 0), animated: true });
   };
 
+  const jumpTo = (topic: TopicNode) => {
+    focusTopic(topic);
+    const y = topicOffsets.current[topic.id];
+    if (y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(y - 80, 0), animated: true });
+  };
+
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.bg }}>
-      <View className="flex-1 bg-gray-50">
-        <View className="border-b border-gray-200 bg-white px-5 py-4">
-          <Text className="text-xl font-bold text-gray-900">{roadmap.title}</Text>
-          <Text className="mt-0.5 text-sm text-gray-500" numberOfLines={2}>
-            {roadmap.summary}
-          </Text>
-          {roadmap.total_estimated_hours && (
-            <View className="mt-0.5 flex-row items-center gap-x-1">
-              <Clock size={12} />
-              <Text className="text-xs text-gray-400">{roadmap.total_estimated_hours}h total</Text>
-            </View>
-          )}
-          {/* Progress bar */}
-          <View className="mt-3 h-2 overflow-hidden rounded-full bg-gray-100">
-            <View className="h-2 rounded-full bg-violet-500" style={{ width: `${pct}%` }} />
-          </View>
-          <View className="mt-1 flex-row justify-between">
-            <Text className="text-xs text-gray-400">
-              {completed}/{total} topics complete
+      <View className="bg-bg flex-1">
+        <ScreenHeader
+          title={roadmap.title}
+          back
+          actions={<ThemeToggle />}
+          subtitle={
+            <Text className="text-ink-soft mt-0.5 flex-1 pr-2 text-[13px]" numberOfLines={2}>
+              {roadmap.summary}
+              {roadmap.total_estimated_hours ? ` · ${roadmap.total_estimated_hours}h total` : ''}
             </Text>
-            <Text className="text-xs font-semibold text-violet-600">{pct}%</Text>
-          </View>
-
-          {!!insights[roadmap._id] && (
-            <PersonalizationPanel
-              insights={insights[roadmap._id]}
-              // Routed through the chat panel on purpose: it lands in the existing
-              // modify-roadmap flow, which asks for approval and merges the result
-              // so completed topics survive the retune.
-              onRetune={(prompt) => sendChatMessage(prompt, roadmap._id)}
-            />
-          )}
-
-          {/* A single obvious entry point. At 0% the learner otherwise faces a
-            wall of 26 rows with nothing telling them where to begin. */}
-          {nextTopic && (
-            <TouchableOpacity
-              onPress={() => {
-                focusTopic(nextTopic);
-                const y = topicOffsets.current[nextTopic.id];
-                if (y !== undefined) {
-                  scrollRef.current?.scrollTo({ y: Math.max(y - 80, 0), animated: true });
-                }
-              }}
-              className="mt-3 flex-row items-center justify-between rounded-lg bg-violet-50 px-3 py-2"
-              activeOpacity={0.7}>
-              <Text className="flex-1 text-xs text-violet-700" numberOfLines={1}>
-                <Text className="font-semibold">
-                  {completed === 0 ? 'Start here: ' : 'Next up: '}
-                </Text>
-                {nextTopic.title}
-              </Text>
-              <Text className="ml-2 text-xs text-violet-400">→</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+          }
+        />
 
         <ScrollView
           ref={scrollRef}
           className="flex-1"
-          contentContainerStyle={{ padding: 16, paddingBottom: 32 }}>
-          {!!progressError && (
-            <View className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3">
-              <Text className="text-xs text-red-700">{progressError}</Text>
-            </View>
-          )}
+          contentContainerStyle={{ paddingBottom: 40 }}>
+          <PageBody className="pt-3">
+            <Card className="mb-3">
+              <View className="mb-2.5 flex-row items-center justify-between">
+                <Text className="text-ink text-[15px] font-bold">Overall progress</Text>
+                <Text className="text-primary text-[15px] font-bold">{pct}%</Text>
+              </View>
+              <ProgressBar pct={pct} tone={pct === 100 ? 'success' : 'primary'} />
+              <Text className="text-ink-faint mt-1.5 text-[13px]">
+                {completed}/{total} topics complete
+              </Text>
 
-          {!!justFinished && (
-            <View className="mb-3 rounded-xl border border-green-200 bg-green-50 p-3">
-              <Text className="text-xs font-medium text-green-800">{justFinished}</Text>
-            </View>
-          )}
+              {!!insights[roadmap._id] && (
+                <PersonalizationPanel
+                  insights={insights[roadmap._id]}
+                  // Routed through the chat panel on purpose: it lands in the existing
+                  // modify-roadmap flow, which asks for approval and merges the result
+                  // so completed topics survive the retune.
+                  onRetune={(prompt) => sendChatMessage(prompt, roadmap._id)}
+                />
+              )}
+            </Card>
 
-          {groups.map(({ id: groupId, stage, topics }) => {
-            const stageDone = topics.filter(isCompleted).length;
-            const stagePct = Math.round((stageDone / topics.length) * 100);
-            return (
-              <View key={groupId} className="mb-5">
-                {/* Stage header with its own progress — a 26-topic roadmap needs
-                milestones closer than "the whole thing". */}
-                <View className="mb-2">
-                  <View className="flex-row items-center justify-between">
-                    <Text className="text-xs font-bold tracking-widest text-gray-400 uppercase">
+            {/* A single obvious entry point. At 0% the learner otherwise faces a
+                wall of 26 rows with nothing telling them where to begin. */}
+            {nextTopic && (
+              <TouchableOpacity
+                onPress={() => jumpTo(nextTopic)}
+                className="bg-primary-soft mb-4 flex-row items-center gap-2 rounded-xl px-3.5 py-3"
+                activeOpacity={0.7}>
+                <Text className="text-primary text-[13px] font-bold">
+                  {completed === 0 ? 'Start here' : 'Next up'} →
+                </Text>
+                <Text className="text-ink flex-1 text-[15px]" numberOfLines={1}>
+                  {nextTopic.title}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {!!progressError && (
+              <View className="border-danger bg-danger-soft mb-3 rounded-xl border p-3">
+                <Text className="text-danger text-[13px]">{progressError}</Text>
+              </View>
+            )}
+
+            {!!justFinished && (
+              <View className="border-success bg-success-soft mb-3 rounded-xl border p-3">
+                <Text className="text-success text-[13px] font-semibold">{justFinished}</Text>
+              </View>
+            )}
+
+            {groups.map(({ id: groupId, stage, topics }) => {
+              const stageDone = topics.filter(isCompleted).length;
+              const allDone = stageDone === topics.length;
+              const folded = stageCollapsed(groupId, allDone);
+
+              return (
+                <View key={groupId} className="mb-5">
+                  {/* Stage header with its own count — a 26-topic roadmap needs
+                      milestones closer than "the whole thing". */}
+                  <TouchableOpacity
+                    onPress={() => setStageToggles((t) => ({ ...t, [groupId]: !folded }))}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: !folded }}
+                    className="border-line mb-3 flex-row items-center justify-between gap-2 border-b pb-2">
+                    <Text
+                      className={`flex-1 text-[17px] font-bold ${
+                        allDone ? 'text-success' : 'text-ink'
+                      }`}
+                      numberOfLines={1}>
+                      {allDone ? '✓ ' : ''}
                       {stage}
                     </Text>
-                    <Text
-                      className={`text-xs font-semibold ${
-                        stagePct === 100 ? 'text-green-600' : 'text-gray-400'
-                      }`}>
-                      {stagePct === 100 ? '✓ ' : ''}
+                    <Text className="text-ink-faint text-[13px] font-semibold">
                       {stageDone}/{topics.length}
                     </Text>
-                  </View>
-                  <View className="mt-1 h-1 overflow-hidden rounded-full bg-gray-100">
-                    <View
-                      className={`h-1 rounded-full ${
-                        stagePct === 100 ? 'bg-green-500' : 'bg-violet-400'
-                      }`}
-                      style={{ width: `${stagePct}%` }}
-                    />
-                  </View>
-                </View>
+                    <Text className="text-ink-faint text-[13px]">{folded ? '▾' : '▴'}</Text>
+                  </TouchableOpacity>
 
-                {topics.map((topic) => {
-                  const isExpanded = expanded.has(topic.id);
-                  const isSelected = selectedTopic?.id === topic.id;
-                  const done = isCompleted(topic);
-                  const started = topic.progress_status === 'in_progress';
-                  // Fully taught, awaiting its checkpoint.
-                  const ready = topic.progress_status === 'needs_review';
-                  const duration = formatMinutes(topic.estimated_minutes);
-                  const isCheckpointOpen = checkpoint?.topicId === topic.id;
-                  const noteCount = insights[roadmap._id]?.note_counts?.[topic.id] ?? 0;
-                  const topicNotes = notes.filter((n) => n.topicId === topic.id);
-                  return (
-                    <View
-                      key={topic.id}
-                      onLayout={(e) => {
-                        topicOffsets.current[topic.id] = e.nativeEvent.layout.y;
-                      }}
-                      className={`mb-2 rounded-xl border p-4 ${
-                        done
-                          ? 'border-green-200 bg-green-50/40'
-                          : ready
-                            ? 'border-amber-300 bg-amber-50/40'
-                            : isSelected
-                              ? 'border-violet-400 bg-white'
-                              : 'border-gray-200 bg-white'
-                      }`}>
-                      {/* Topic row */}
-                      <View className="flex-row items-start gap-3">
-                        {/* Completion toggle. Generous hit area — at 20px this was
-                        easy to miss entirely, which made the tracker look like
-                        it had no way to record anything. */}
-                        <TouchableOpacity
-                          onPress={() => handleToggle(topic)}
-                          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                          accessibilityRole="checkbox"
-                          accessibilityState={{ checked: done }}
-                          accessibilityLabel={
-                            done
-                              ? `Mark ${topic.title} not started`
-                              : `Mark ${topic.title} complete`
-                          }
-                          className={`mt-0.5 h-6 w-6 items-center justify-center rounded-full border-2 ${
-                            done
-                              ? 'border-green-500 bg-green-500'
-                              : ready
-                                ? 'border-amber-500 bg-white'
-                                : started
-                                  ? 'border-violet-500 bg-white'
-                                  : 'border-gray-300 bg-white'
-                          }`}>
-                          {done && <Text className="text-xs font-bold text-white">✓</Text>}
-                          {!done && (started || ready) && (
-                            <View
-                              className={`h-2 w-2 rounded-full ${
-                                ready ? 'bg-amber-500' : 'bg-violet-500'
-                              }`}
-                            />
-                          )}
-                        </TouchableOpacity>
+                  {!folded &&
+                    topics.map((topic, idx) => {
+                      const isExpanded = expanded.has(topic.id);
+                      const done = isCompleted(topic);
+                      const started = topic.progress_status === 'in_progress';
+                      // Fully taught, awaiting its checkpoint.
+                      const ready = topic.progress_status === 'needs_review';
+                      const duration = formatMinutes(topic.estimated_minutes);
+                      const isCheckpointOpen = checkpoint?.topicId === topic.id;
+                      const noteCount = insights[roadmap._id]?.note_counts?.[topic.id] ?? 0;
+                      const topicNotes = notes.filter((n) => n.topicId === topic.id);
+                      const meta = [duration, topic.difficulty].filter(Boolean).join(' · ');
 
-                        {/* Title — also selects the topic for the chat panel */}
-                        <TouchableOpacity
-                          className="flex-1"
-                          onPress={() => handleTopicPress(topic)}
-                          activeOpacity={0.7}>
-                          <View className="flex-row items-center justify-between">
-                            <Text
-                              className={`flex-1 text-sm font-medium ${
-                                done ? 'text-gray-400 line-through' : 'text-gray-900'
-                              }`}>
-                              {topic.order}. {topic.title}
-                            </Text>
-                            <Text className="ml-2 text-xs text-gray-400">
-                              {isExpanded ? '▲' : '▼'}
-                            </Text>
-                          </View>
-                          <View className="mt-0.5 flex-row items-center gap-x-2">
-                            {duration ? (
-                              <View className="flex-row items-center gap-x-1">
-                                <Clock size={12} />
-                                <Text className="text-sm text-gray-400">{duration}</Text>
-                              </View>
-                            ) : null}
-                            {!!topic.difficulty && (
-                              <Text className="text-xs text-gray-400 capitalize">
-                                {topic.difficulty}
-                              </Text>
-                            )}
-                          </View>
-                        </TouchableOpacity>
-                      </View>
+                      return (
+                        <View
+                          key={topic.id}
+                          onLayout={(e) => {
+                            topicOffsets.current[topic.id] = e.nativeEvent.layout.y;
+                          }}
+                          className="flex-row">
+                          <TopicDot
+                            done={done}
+                            ready={ready}
+                            started={started}
+                            last={idx === topics.length - 1}
+                            label={
+                              done
+                                ? `Mark ${topic.title} not started`
+                                : `Mark ${topic.title} complete`
+                            }
+                            onPress={() => handleToggle(topic)}
+                          />
 
-                      {/* Expanded content */}
-                      {isExpanded && (
-                        <View className="mt-3 border-t border-gray-100 pt-3">
-                          <Text className="mb-3 text-sm leading-relaxed text-gray-600">
-                            {topic.description}
-                          </Text>
-
-                          {(topic.learning_outcomes ?? []).length > 0 && (
-                            <View className="mb-3">
-                              <Text className="mb-1 text-xs font-semibold text-gray-500">
-                                You&apos;ll be able to
-                              </Text>
-                              {topic.learning_outcomes!.map((o, i) => (
-                                <Text key={i} className="mb-0.5 text-xs text-gray-500">
-                                  • {o}
-                                </Text>
-                              ))}
-                            </View>
-                          )}
-
-                          {(topic.prerequisites ?? []).length > 0 && (
-                            <View className="mb-3">
-                              <Text className="mb-1 text-xs font-semibold text-gray-500">
-                                Prerequisites
-                              </Text>
-                              <Text className="text-xs text-gray-500">
-                                {topic.prerequisites!.join(', ')}
-                              </Text>
-                            </View>
-                          )}
-
-                          {(topic.resources ?? []).length > 0 && (
-                            <View className="mb-3">
-                              <Text className="mb-1 text-xs font-semibold text-gray-500">
-                                Resources
-                              </Text>
-                              {topic.resources!.map((r, i) => (
-                                <TouchableOpacity
-                                  key={i}
-                                  disabled={!r.url}
-                                  onPress={() => r.url && Linking.openURL(r.url).catch(() => {})}>
-                                  <Text
-                                    className={`mb-0.5 text-xs ${
-                                      r.url ? 'text-blue-600 underline' : 'text-gray-500'
-                                    }`}>
-                                    • {r.title}
-                                  </Text>
-                                </TouchableOpacity>
-                              ))}
-                            </View>
-                          )}
-
-                          {/* The explicit affordance. The circle alone reads as a
-                          status dot, not a control, so an expanded topic always
-                          spells out the action. */}
-                          {isCheckpointOpen ? null : (
-                            <TouchableOpacity
-                              onPress={() => handleToggle(topic)}
-                              disabled={checkpointLoading}
-                              className={`items-center rounded-lg py-2.5 ${
-                                done ? 'bg-gray-100' : started ? 'bg-green-600' : 'bg-violet-600'
-                              }`}
-                              activeOpacity={0.8}>
-                              {checkpointLoading && !done ? (
-                                <ActivityIndicator size="small" color="white" />
-                              ) : (
+                          <View className="flex-1 pb-2 pl-2">
+                            {/* Collapsed, a topic is one quiet line on the rail;
+                                expanded, it becomes the card the mockup shows. */}
+                            {!isExpanded ? (
+                              <TouchableOpacity
+                                onPress={() => handleTopicPress(topic)}
+                                activeOpacity={0.7}
+                                className="flex-row items-center justify-between gap-2 py-1.5">
                                 <Text
-                                  className={`text-sm font-semibold ${
-                                    done ? 'text-gray-600' : 'text-white'
-                                  }`}>
-                                  {done
-                                    ? '✓ Completed — mark as not done'
-                                    : ready
-                                      ? 'Ready — take the final checkpoint'
-                                      : started
-                                        ? 'Take checkpoint to complete'
-                                        : 'Start this topic'}
+                                  className={`flex-1 text-[15px] ${
+                                    done ? 'text-ink-faint line-through' : 'text-ink'
+                                  }`}
+                                  numberOfLines={1}>
+                                  {topic.order}. {topic.title}
                                 </Text>
-                              )}
-                            </TouchableOpacity>
-                          )}
+                                {!!meta && (
+                                  <Text className="text-ink-faint text-[11px]">{meta}</Text>
+                                )}
+                              </TouchableOpacity>
+                            ) : (
+                              <Card className="border-primary mb-1">
+                                <TouchableOpacity
+                                  onPress={() => handleTopicPress(topic)}
+                                  activeOpacity={0.7}>
+                                  <View className="flex-row items-start justify-between gap-2">
+                                    <Text
+                                      className={`flex-1 text-[17px] font-bold ${
+                                        done ? 'text-ink-faint line-through' : 'text-ink'
+                                      }`}>
+                                      {topic.order}. {topic.title}
+                                    </Text>
+                                    {!!meta && (
+                                      <Text className="text-ink-faint text-[13px]">{meta}</Text>
+                                    )}
+                                  </View>
+                                </TouchableOpacity>
 
-                          {!done && !started && !ready && (
-                            <Text className="mt-1.5 text-center text-[11px] text-gray-400">
-                              Starting it turns on daily tips for this topic.
-                            </Text>
-                          )}
-                          {ready && (
-                            <Text className="mt-1.5 text-center text-[11px] text-gray-400">
-                              The tips have covered this topic — pass the checkpoint to complete it.
-                            </Text>
-                          )}
+                                {!!topic.description && (
+                                  <Text className="text-ink-soft mt-2 text-[15px] leading-relaxed">
+                                    {topic.description}
+                                  </Text>
+                                )}
 
-                          {done && !isCheckpointOpen && (
-                            <TouchableOpacity
-                              onPress={() => startCheckpoint(topic.id, roadmap._id)}
-                              className="mt-2 items-center rounded-lg bg-amber-50 py-2"
-                              activeOpacity={0.8}>
-                              <Text className="text-xs font-medium text-amber-700">
-                                🔁 Review this topic
-                              </Text>
-                            </TouchableOpacity>
-                          )}
+                                {(topic.learning_outcomes ?? []).length > 0 && (
+                                  <View className="mt-3">
+                                    <Text className="text-ink mb-1 text-[13px] font-bold">
+                                      You&apos;ll be able to
+                                    </Text>
+                                    {topic.learning_outcomes!.map((o, i) => (
+                                      <View key={i} className="flex-row gap-2">
+                                        <Text className="text-ink-faint text-[15px] leading-relaxed">
+                                          •
+                                        </Text>
+                                        <Text className="text-ink-soft flex-1 text-[15px] leading-relaxed">
+                                          {o}
+                                        </Text>
+                                      </View>
+                                    ))}
+                                  </View>
+                                )}
 
-                          {/* Notes live with the topic they're about, so writing
-                          something down is part of working through it. */}
-                          <View className="mt-3 border-t border-gray-100 pt-3">
-                            <TouchableOpacity
-                              onPress={() => toggleNotes(topic.id)}
-                              className="mb-2 flex-row items-center justify-between"
-                              activeOpacity={0.7}>
-                              <Text className="text-xs font-semibold text-gray-500">
-                                Notes{noteCount ? ` (${noteCount})` : ''}
-                              </Text>
-                              <Text className="text-xs text-gray-400">
-                                {notesOpen === topic.id ? '▲' : '▼'}
-                              </Text>
-                            </TouchableOpacity>
+                                {(topic.prerequisites ?? []).length > 0 && (
+                                  <View className="mt-3 flex-row flex-wrap items-center gap-1.5">
+                                    <Text className="text-ink-faint text-[13px]">Needs:</Text>
+                                    {topic.prerequisites!.map((p, i) => (
+                                      <Badge key={i} label={p} tone="neutral" />
+                                    ))}
+                                  </View>
+                                )}
 
-                            {notesOpen === topic.id && (
-                              <>
-                                {topicNotes.map((n) => (
-                                  <NoteRow
-                                    key={n._id}
-                                    note={n}
-                                    onToggleResolved={toggleNoteResolved}
-                                    onDelete={removeNote}
+                                {(topic.resources ?? []).length > 0 && (
+                                  <View className="mt-3">
+                                    {topic.resources!.map((r, i) => (
+                                      <TouchableOpacity
+                                        key={i}
+                                        disabled={!r.url}
+                                        onPress={() =>
+                                          r.url && Linking.openURL(r.url).catch(() => {})
+                                        }
+                                        activeOpacity={0.7}>
+                                        <Text
+                                          className={`mb-0.5 text-[13px] ${
+                                            r.url ? 'text-primary font-semibold' : 'text-ink-soft'
+                                          }`}
+                                          numberOfLines={1}>
+                                          {r.title} {r.url ? '↗' : ''}
+                                        </Text>
+                                      </TouchableOpacity>
+                                    ))}
+                                  </View>
+                                )}
+
+                                {/* The explicit affordance. The dot alone reads as a
+                                    status marker, not a control, so an expanded topic
+                                    always spells out the action. */}
+                                {!isCheckpointOpen && (
+                                  <View className="mt-4">
+                                    <Button
+                                      label={
+                                        done
+                                          ? '✓ Completed — mark as not done'
+                                          : ready
+                                            ? 'Take the final checkpoint'
+                                            : started
+                                              ? 'Take checkpoint to complete'
+                                              : 'Start this topic'
+                                      }
+                                      variant={done ? 'secondary' : 'primary'}
+                                      loading={checkpointLoading && !done}
+                                      onPress={() => handleToggle(topic)}
+                                    />
+                                    {!done && !started && !ready && (
+                                      <Text className="text-ink-faint mt-1.5 text-[11px]">
+                                        Starting it turns on daily tips for this topic.
+                                      </Text>
+                                    )}
+                                    {ready && (
+                                      <Text className="text-ink-faint mt-1.5 text-[11px]">
+                                        The tips have covered this topic — pass the checkpoint to
+                                        complete it.
+                                      </Text>
+                                    )}
+                                  </View>
+                                )}
+
+                                {done && !isCheckpointOpen && (
+                                  <View className="mt-2">
+                                    <Button
+                                      label="🔁 Review this topic"
+                                      variant="secondary"
+                                      size="sm"
+                                      onPress={() => startCheckpoint(topic.id, roadmap._id)}
+                                    />
+                                  </View>
+                                )}
+
+                                {/* Notes live with the topic they're about, so writing
+                                    something down is part of working through it. */}
+                                <View className="border-line mt-4 border-t pt-3">
+                                  <TouchableOpacity
+                                    onPress={() => toggleNotes(topic.id)}
+                                    className="flex-row items-center justify-between"
+                                    activeOpacity={0.7}>
+                                    <Text className="text-ink-soft text-[13px] font-bold">
+                                      Notes{noteCount ? ` (${noteCount})` : ''}
+                                    </Text>
+                                    <Text className="text-ink-faint text-[13px]">
+                                      {notesOpen === topic.id ? '▴' : '▾'}
+                                    </Text>
+                                  </TouchableOpacity>
+
+                                  {notesOpen === topic.id && (
+                                    <View className="mt-2">
+                                      {topicNotes.map((n) => (
+                                        <NoteRow
+                                          key={n._id}
+                                          note={n}
+                                          onToggleResolved={toggleNoteResolved}
+                                          onDelete={removeNote}
+                                        />
+                                      ))}
+                                      <NoteComposer
+                                        saving={notesLoading}
+                                        onSave={(n) =>
+                                          addNote({
+                                            ...n,
+                                            roadmapId: roadmap._id,
+                                            topicId: topic.id,
+                                          })
+                                        }
+                                      />
+                                    </View>
+                                  )}
+                                </View>
+
+                                {isCheckpointOpen && checkpoint && (
+                                  <CheckpointCard
+                                    checkpoint={checkpoint}
+                                    outcome={checkpointOutcome}
+                                    loading={checkpointLoading}
+                                    error={checkpointError}
+                                    onSubmit={async (answers) => {
+                                      const result = await submitCheckpoint(answers);
+                                      if (result?.passed && !result.was_review) advanceFrom(topic);
+                                    }}
+                                    onRetry={() => startCheckpoint(topic.id, roadmap._id, true)}
+                                    onClose={closeCheckpoint}
                                   />
-                                ))}
-                                <NoteComposer
-                                  saving={notesLoading}
-                                  onSave={(n) =>
-                                    addNote({ ...n, roadmapId: roadmap._id, topicId: topic.id })
-                                  }
-                                />
-                              </>
+                                )}
+                              </Card>
                             )}
                           </View>
-
-                          {isCheckpointOpen && checkpoint && (
-                            <CheckpointCard
-                              checkpoint={checkpoint}
-                              outcome={checkpointOutcome}
-                              loading={checkpointLoading}
-                              error={checkpointError}
-                              onSubmit={async (answers) => {
-                                const result = await submitCheckpoint(answers);
-                                if (result?.passed && !result.was_review) advanceFrom(topic);
-                              }}
-                              onRetry={() => startCheckpoint(topic.id, roadmap._id, true)}
-                              onClose={closeCheckpoint}
-                            />
-                          )}
                         </View>
-                      )}
-                    </View>
-                  );
-                })}
-              </View>
-            );
-          })}
+                      );
+                    })}
+                </View>
+              );
+            })}
+          </PageBody>
         </ScrollView>
       </View>
     </SafeAreaView>

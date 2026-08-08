@@ -48,11 +48,11 @@ export default function LearningLayout() {
         </View>
       </View>
 
-      {showChat && (
-        <View className="absolute right-8 bottom-8">
-          <ChatBot />
-        </View>
-      )}
+      {/* No wrapper: the tutor positions itself, and it needs to — collapsed it's
+          a button clear of the home indicator, open it's a bottom sheet on a
+          phone and a full-height docked panel on a wide screen. A fixed
+          right-4/bottom-4 box could only ever be the first of those. */}
+      {showChat && <ChatBot />}
     </View>
   );
 }
