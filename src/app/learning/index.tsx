@@ -1,4 +1,13 @@
-import ScreenHeader from '@/components/layout/ScreenHeader';
+import { Badge, SectionLabel } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card, DashedCard } from '@/components/ui/Card';
+import { PageBody } from '@/components/ui/Page';
+import { ProgressBar } from '@/components/ui/ProgressBar';
+import ScreenHeader from '@/components/ui/ScreenHeader';
+import SectionNav, { useWideNav } from '@/components/ui/SectionNav';
+import { StatsGrid, type Stat } from '@/components/ui/StatTile';
+import { useColors } from '@/components/ui/theme';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { useLearningStore } from '@/features/learning/store';
 import type {
   BlockedReason,
@@ -10,7 +19,7 @@ import type {
 } from '@/features/learning/types';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Linking, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const TREND_MARK: Record<MasterySummary['trend'], string> = {
@@ -20,38 +29,34 @@ const TREND_MARK: Record<MasterySummary['trend'], string> = {
   new: '',
 };
 
-function StatsRow({ stats }: { stats: LearningStats }) {
-  if (stats.topics.total === 0) return null;
+/** The four (sometimes five) numbers at the top: 2×2 on a phone, one row wider. */
+function statTiles(stats: LearningStats): Stat[] {
+  if (stats.topics.total === 0) return [];
   const { mastery } = stats;
-  const tiles: [string | number, string][] = [
-    [`${stats.topics.completed}/${stats.topics.total}`, 'topics'],
-    [stats.streak_days > 0 ? `🔥 ${stats.streak_days}` : '—', 'streak'],
-    [stats.completed_this_week, 'this week'],
-  ];
-  // Mastery leads the right-hand side once anything has been graded: it answers
-  // "how well do I know this", which none of the counts above do.
-  if (mastery?.score !== null && mastery?.score !== undefined) {
-    tiles.push([`${mastery.score}%${TREND_MARK[mastery.trend]}`, 'mastery']);
-  }
-  if (stats.reviews_due > 0) tiles.push([stats.reviews_due, 'to review']);
 
-  return (
-    <View className="mx-4 mt-3 flex-row rounded-xl border border-gray-200 bg-white p-3">
-      {tiles.map(([value, label]) => (
-        <View key={label} className="flex-1 items-center">
-          <Text
-            className={`text-base font-bold ${
-              label === 'mastery' && mastery.trend === 'slipping'
-                ? 'text-orange-600'
-                : 'text-gray-900'
-            }`}>
-            {value}
-          </Text>
-          <Text className="text-[10px] text-gray-400">{label}</Text>
-        </View>
-      ))}
-    </View>
-  );
+  const tiles: Stat[] = [
+    { value: `${stats.topics.completed}/${stats.topics.total}`, label: 'topics' },
+    {
+      value: stats.streak_days > 0 ? `🔥 ${stats.streak_days}` : '—',
+      label: 'streak',
+      tone: stats.streak_days > 0 ? 'streak' : 'default',
+    },
+    { value: stats.completed_this_week, label: 'this week' },
+  ];
+
+  // Mastery leads the right-hand side once anything has been graded: it answers
+  // "how well do I know this", which none of the counts above do. Null is not
+  // zero — nothing graded yet means the tile is left out entirely.
+  if (mastery?.score !== null && mastery?.score !== undefined) {
+    tiles.push({
+      value: `${mastery.score}%${TREND_MARK[mastery.trend]}`,
+      label: 'mastery',
+      tone: mastery.trend === 'slipping' ? 'warning' : 'success',
+    });
+  }
+  if (stats.reviews_due > 0) tiles.push({ value: stats.reviews_due, label: 'to review' });
+
+  return tiles;
 }
 
 /** The topics holding the mastery number down, and a way into them. Sits with
@@ -66,31 +71,29 @@ function WeakestTopics({ mastery }: { mastery: MasterySummary }) {
   if (shaky.length === 0) return null;
 
   return (
-    <View className="mb-3 rounded-xl border border-gray-200 bg-white p-3">
-      <Text className="mb-2 text-[10px] font-semibold tracking-wide text-gray-400 uppercase">
-        Not sticking yet
-      </Text>
+    <Card className="mb-3">
+      <SectionLabel>Not sticking yet</SectionLabel>
       {shaky.map((t) => (
         <TouchableOpacity
           key={`${t.roadmapId}:${t.topicId}`}
           onPress={() => router.push(`/learning/${t.roadmapId}`)}
-          className="mb-1.5 flex-row items-center justify-between"
+          className="mb-1.5 flex-row items-center justify-between gap-2"
           activeOpacity={0.7}>
-          <View className="flex-1 pr-2">
-            <Text className="text-xs font-medium text-gray-800" numberOfLines={1}>
+          <View className="flex-1">
+            <Text className="text-ink text-[15px] font-medium" numberOfLines={1}>
               {t.title}
             </Text>
-            <Text className="text-[10px] text-gray-400" numberOfLines={1}>
+            <Text className="text-ink-faint text-[11px]" numberOfLines={1}>
               {t.overdue_days > 0
                 ? `review ${t.overdue_days}d overdue`
                 : `${t.attempts} attempt${t.attempts === 1 ? '' : 's'}`}
               {t.trend === 'slipping' ? ' · slipping' : ''}
             </Text>
           </View>
-          <Text className="text-xs font-semibold text-orange-600">{t.mastery}%</Text>
+          <Text className="text-warning text-[13px] font-bold">{t.mastery}%</Text>
         </TouchableOpacity>
       ))}
-    </View>
+    </Card>
   );
 }
 
@@ -112,24 +115,20 @@ function untilNext(iso: string): string {
 function NoActiveRoadmaps({ hasRoadmaps }: { hasRoadmaps: boolean }) {
   const router = useRouter();
   return (
-    <View className="mb-3 rounded-2xl border border-dashed border-gray-300 bg-white p-5">
-      <Text className="mb-1 text-base font-bold text-gray-900">
+    <DashedCard className="mb-3 p-5">
+      <Text className="text-ink mb-1 text-[20px] font-bold">
         {hasRoadmaps ? 'Nothing running' : 'No roadmap yet'}
       </Text>
-      <Text className="mb-4 text-sm leading-relaxed text-gray-500">
+      <Text className="text-ink-soft mb-4 text-[15px] leading-relaxed">
         {hasRoadmaps
           ? 'Every roadmap is paused. Resume one to start getting digests again.'
           : "Ask the tutor what you want to learn and it'll build you one."}
       </Text>
-      <TouchableOpacity
+      <Button
+        label={hasRoadmaps ? 'Manage roadmaps' : 'Get started'}
         onPress={() => router.push('/learning/roadmaps')}
-        className="self-start rounded-lg bg-violet-600 px-4 py-2.5"
-        activeOpacity={0.8}>
-        <Text className="text-sm font-medium text-white">
-          {hasRoadmaps ? 'Manage roadmaps' : 'Get started'}
-        </Text>
-      </TouchableOpacity>
-    </View>
+      />
+    </DashedCard>
   );
 }
 
@@ -142,10 +141,13 @@ function FocusCard({
   focus,
   onGenerate,
   generating,
+  nextAt,
 }: {
   focus: RoadmapFocus;
   onGenerate: () => void;
   generating: boolean;
+  /** Only passed when this is the only running roadmap — see the list below. */
+  nextAt?: string | null;
 }) {
   const router = useRouter();
 
@@ -165,92 +167,75 @@ function FocusCard({
   const revising = focus.blocked_reason === 'needs_revision';
 
   return (
-    <View className="mb-3 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+    <Card className="mb-3">
       <TouchableOpacity
         onPress={() => router.push(`/learning/${focus.roadmapId}`)}
-        className="p-4 pb-3"
         activeOpacity={0.7}>
-        <View className="flex-row items-start justify-between gap-2">
-          <Text className="flex-1 text-base font-bold text-gray-900" numberOfLines={1}>
+        <View className="flex-row items-start justify-between gap-3">
+          <Text className="text-ink flex-1 text-[20px] font-bold" numberOfLines={2}>
             {focus.roadmapTitle}
           </Text>
-          <Text className="mt-0.5 text-[11px] font-semibold text-violet-600">
-            {focus.progress.percent}%
-          </Text>
+          {/* Shrinks rather than pushes: a long topic title truncates inside the
+              badge instead of driving the roadmap title off the card. */}
+          {!!focus.topic && (
+            <View className="max-w-[55%] shrink">
+              <Badge
+                square
+                tone={revising ? 'danger' : review ? 'warning' : 'success'}
+                label={`${revising ? 'Revising' : review ? 'Checkpoint' : 'Now on'}: ${focus.topic.title}`}
+              />
+            </View>
+          )}
         </View>
 
-        {!!focus.topic && (
-          <View className="mt-1 flex-row items-center gap-1.5">
-            <View
-              className={`h-1.5 w-1.5 rounded-full ${
-                revising ? 'bg-red-500' : review ? 'bg-amber-500' : 'bg-green-500'
-              }`}
-            />
-            <Text className="flex-1 text-xs text-gray-500" numberOfLines={1}>
-              {revising ? 'Revising: ' : review ? 'Ready for checkpoint: ' : 'Now on: '}
-              <Text className="font-medium text-gray-800">{focus.topic.title}</Text>
-            </Text>
-          </View>
-        )}
-
-        <View className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-gray-100">
-          <View
-            className={`h-1.5 rounded-full ${review ? 'bg-amber-400' : 'bg-violet-500'}`}
-            style={{ width: `${focus.progress.percent}%` }}
-          />
-        </View>
-        <Text className="mt-1.5 text-[11px] text-gray-400">
+        <Text className="text-ink-soft mt-1 text-[13px]">
           {focus.progress.completed_count}/{focus.progress.total} topics
           {focus.unread > 0 ? ` · ${focus.unread} unread` : ''}
+          {` · ${focus.progress.percent}%`}
         </Text>
+
+        <View className="mt-3">
+          <ProgressBar pct={focus.progress.percent} tone={review ? 'warning' : 'primary'} />
+        </View>
       </TouchableOpacity>
 
       {/* One action per card, and it's the one that moves this roadmap forward.
           Pausing and resuming live on the roadmap list, which is where the whole
           set is visible and a swap actually makes sense. */}
-      <View className="flex-row items-center gap-2 border-t border-gray-100 bg-gray-50/60 px-4 py-2.5">
+      <View className="mt-3 flex-row items-center justify-between gap-3">
         {review ? (
-          <TouchableOpacity
+          <Button
+            label="Take the checkpoint"
             onPress={() => router.push(`/learning/${focus.roadmapId}`)}
-            className="flex-1 items-center rounded-lg bg-amber-500 py-2"
-            activeOpacity={0.8}>
-            <Text className="text-xs font-semibold text-white">Take the checkpoint</Text>
-          </TouchableOpacity>
+          />
         ) : (
-          <TouchableOpacity
+          <Button
+            label={
+              revising
+                ? focus.can_generate
+                  ? 'Get revision tips'
+                  : 'Revision tips waiting'
+                : 'Continue learning'
+            }
             onPress={onGenerate}
-            disabled={!focus.can_generate || generating}
-            className={`flex-1 items-center rounded-lg py-2 ${
-              focus.can_generate && !generating ? 'bg-violet-100' : 'bg-gray-100'
-            }`}
-            activeOpacity={0.8}>
-            {generating ? (
-              <View className="flex-row items-center gap-2">
-                <ActivityIndicator size="small" />
-                <Text className="text-xs text-gray-500">Putting one together…</Text>
-              </View>
-            ) : (
-              <Text
-                className={`text-xs font-semibold ${
-                  focus.can_generate ? 'text-violet-700' : 'text-gray-400'
-                }`}>
-                {revising
-                  ? focus.can_generate
-                    ? 'Get revision tips'
-                    : 'Revision tips waiting'
-                  : 'Generate digest'}
-              </Text>
-            )}
-          </TouchableOpacity>
+            disabled={!focus.can_generate}
+            loading={generating}
+            loadingLabel="Putting one together…"
+          />
+        )}
+        {!!nextAt && (
+          <Text className="text-ink-faint shrink text-right text-[13px]" numberOfLines={1}>
+            Next digest {untilNext(nextAt)}
+          </Text>
         )}
       </View>
 
       {!!focus.blocked_reason && !!note[focus.blocked_reason] && (
-        <Text className="border-t border-gray-100 px-4 py-2 text-[11px] text-gray-400">
+        <Text className="border-line text-ink-faint mt-3 border-t pt-2.5 text-[13px]">
           {note[focus.blocked_reason]}
         </Text>
       )}
-    </View>
+    </Card>
   );
 }
 
@@ -275,6 +260,9 @@ function DigestCard({
   const router = useRouter();
   const questions = digest.quiz ?? [];
   const [selected, setSelected] = useState<(number | null)[]>([]);
+  // Sources are collapsed by default: they're a side door out of the digest,
+  // not the thing being read.
+  const [showSources, setShowSources] = useState(false);
 
   useEffect(() => {
     setSelected(new Array(questions.length).fill(null));
@@ -286,57 +274,66 @@ function DigestCard({
     .map((a, i) => (a !== null ? { question: i, answer: a } : null))
     .filter((x): x is { question: number; answer: number } => x !== null);
 
+  const sources = digest.resources.filter((r) => !!r.url);
+
   return (
-    <View className="mb-3 rounded-xl border border-gray-200 bg-white p-4">
-      <View className="mb-1 flex-row items-start justify-between">
-        <View className="flex-1 pr-2">
-          <Text className="text-sm font-semibold text-gray-900">{digest.topicTitle}</Text>
-          <Text className="text-[10px] text-gray-400">
+    <Card className="mb-3">
+      <View className="flex-row items-start justify-between gap-2">
+        <View className="flex-1">
+          <Text className="text-ink text-[17px] font-bold">{digest.topicTitle}</Text>
+          <Text className="text-ink-faint mt-0.5 text-[13px]">
             {digest.roadmapTitle ? `${digest.roadmapTitle} · ` : ''}
-            {digest.sequence ? `#${digest.sequence} · ` : ''}
+            {digest.sequence ? `Digest #${digest.sequence} · ` : ''}
             {new Date(digest.createdAt).toLocaleDateString(undefined, {
               month: 'short',
               day: 'numeric',
             })}
           </Text>
         </View>
-        <View className="rounded-full bg-violet-100 px-2 py-0.5">
-          <Text className="text-[10px] font-medium text-violet-700">New</Text>
-        </View>
+        <Badge label={digest.kind === 'revision' ? 'REVISION' : 'NEW'} tone="primary" square />
       </View>
 
-      <View className="mt-2">
+      <View className="mt-3 gap-1.5">
         {digest.bullets.map((b, i) => (
-          <Text key={i} className="mb-1 text-xs leading-relaxed text-gray-700">
-            • {b}
-          </Text>
+          <View key={i} className="flex-row gap-2">
+            <Text className="text-ink-faint text-[15px] leading-relaxed">•</Text>
+            <Text className="text-ink-soft flex-1 text-[15px] leading-relaxed">{b}</Text>
+          </View>
         ))}
       </View>
 
-      {digest.resources.length > 0 && (
-        <View className="mt-2 border-t border-gray-100 pt-2">
-          {digest.resources.slice(0, 3).map((r, i) => (
-            <TouchableOpacity
-              key={i}
-              disabled={!r.url}
-              onPress={() => r.url && Linking.openURL(r.url).catch(() => {})}>
-              <Text className="mb-0.5 text-[11px] text-blue-600 underline" numberOfLines={1}>
-                {r.title}
-              </Text>
-            </TouchableOpacity>
-          ))}
+      {sources.length > 0 && (
+        <View className="mt-3">
+          <TouchableOpacity onPress={() => setShowSources((v) => !v)} activeOpacity={0.7}>
+            <Text className="text-primary text-[13px] font-semibold">
+              {sources.length} source{sources.length === 1 ? '' : 's'} {showSources ? '▾' : '↗'}
+            </Text>
+          </TouchableOpacity>
+          {showSources && (
+            <View className="mt-1.5 gap-1">
+              {sources.map((r, i) => (
+                <TouchableOpacity
+                  key={i}
+                  onPress={() => Linking.openURL(r.url).catch(() => {})}
+                  activeOpacity={0.7}>
+                  <Text className="text-primary text-[13px] underline" numberOfLines={1}>
+                    {r.title}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
       )}
 
       {questions.length > 0 && (
-        <View className="mt-3 rounded-lg bg-amber-50 p-3">
-          <Text className="mb-2 text-[11px] font-semibold text-amber-700">
-            Quick recall — from the earlier tips on this topic
-          </Text>
+        <View className="border-line mt-3 border-t pt-3">
+          <SectionLabel>Quick check</SectionLabel>
           {questions.map((q, qIdx) => (
             <View key={qIdx} className="mb-2">
-              <Text className="mb-1.5 text-xs font-medium text-gray-800">
-                {qIdx + 1}. {q.question}
+              <Text className="text-ink mb-2 text-[15px] font-medium">
+                {questions.length > 1 ? `${qIdx + 1}. ` : ''}
+                {q.question}
               </Text>
               {q.options.map((opt, optIdx) => {
                 const isSel = selected[qIdx] === optIdx;
@@ -351,23 +348,26 @@ function DigestCard({
                         return next;
                       })
                     }
-                    className={`mb-1 flex-row items-center gap-2 rounded-lg border px-2.5 py-1.5 ${
-                      isSel ? 'border-amber-400 bg-white' : 'border-transparent bg-white/60'
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: isSel }}
+                    className={`mb-1.5 flex-row items-center gap-2.5 rounded-xl border px-3 py-2.5 ${
+                      isSel ? 'border-primary bg-primary-soft' : 'border-line bg-surface'
                     }`}
                     activeOpacity={0.7}>
                     <View
-                      className={`h-3 w-3 rounded-full border-2 ${
-                        isSel ? 'border-amber-500 bg-amber-500' : 'border-gray-300'
-                      }`}
-                    />
-                    <Text className="flex-1 text-xs text-gray-700">{opt}</Text>
+                      className={`h-4 w-4 items-center justify-center rounded-full border-2 ${
+                        isSel ? 'border-primary' : 'border-line'
+                      }`}>
+                      {isSel && <View className="bg-primary h-2 w-2 rounded-full" />}
+                    </View>
+                    <Text className="text-ink flex-1 text-[15px]">{opt}</Text>
                   </TouchableOpacity>
                 );
               })}
             </View>
           ))}
           {!!failure && (
-            <Text className="text-[11px] text-red-600">
+            <Text className="text-danger text-[13px]">
               {failure.correct}/{failure.total} right — look back over the tips and try again.
             </Text>
           )}
@@ -377,48 +377,54 @@ function DigestCard({
       {digest.coverage_complete && (
         <TouchableOpacity
           onPress={() => router.push(`/learning/${digest.roadmapId}`)}
-          className="mt-3 rounded-lg bg-green-50 p-2.5"
+          className="bg-success-soft mt-3 rounded-xl p-3"
           activeOpacity={0.8}>
-          <Text className="text-[11px] font-medium text-green-800">
+          <Text className="text-success text-[13px] font-semibold">
             ✓ That covers this topic — take the checkpoint to complete it →
           </Text>
         </TouchableOpacity>
       )}
 
-      <View className="mt-3 flex-row gap-2">
-        <TouchableOpacity
+      <View className="mt-4 flex-row gap-2.5">
+        <Button
+          label="Mark"
+          variant="secondary"
           onPress={() => onMark(answers, false)}
-          disabled={busy || !ready}
-          className={`flex-1 items-center rounded-lg py-2.5 ${
-            busy || !ready ? 'bg-gray-200' : 'bg-green-600'
-          }`}
-          activeOpacity={0.8}>
-          {busy ? (
-            <ActivityIndicator size="small" />
-          ) : (
-            <Text className={`text-xs font-semibold ${ready ? 'text-white' : 'text-gray-400'}`}>
-              Mark
-            </Text>
-          )}
-        </TouchableOpacity>
+          disabled={!ready}
+          loading={busy}
+          full
+        />
         {/* Generating costs a search and an LLM call, so it stays an explicit
             choice rather than something every acknowledgement triggers. */}
-        <TouchableOpacity
+        <Button
+          label="Mark & next"
           onPress={() => onMark(answers, true)}
           disabled={busy || !ready || digest.coverage_complete}
-          className={`flex-1 items-center rounded-lg py-2.5 ${
-            busy || !ready || digest.coverage_complete ? 'bg-gray-200' : 'bg-violet-600'
-          }`}
-          activeOpacity={0.8}>
-          <Text
-            className={`text-xs font-semibold ${
-              busy || !ready || digest.coverage_complete ? 'text-gray-400' : 'text-white'
-            }`}>
-            Mark &amp; next
-          </Text>
-        </TouchableOpacity>
+          full
+        />
       </View>
-    </View>
+    </Card>
+  );
+}
+
+/** Nothing waiting — said as an achievement, with the way back in. */
+function CaughtUp({ hasRoadmaps }: { hasRoadmaps: boolean }) {
+  const router = useRouter();
+  return (
+    <Card className="items-center px-6 py-8">
+      <Text className="text-[28px]">🎉</Text>
+      <Text className="text-ink mt-2 text-[20px] font-bold">You&apos;re all caught up</Text>
+      <Text className="text-ink-soft mt-1 mb-4 text-center text-[15px] leading-relaxed">
+        {hasRoadmaps
+          ? 'No digests waiting. Check back tomorrow, or explore a roadmap.'
+          : 'Start a roadmap and your first digest will land here.'}
+      </Text>
+      <Button
+        label="Browse roadmaps"
+        variant={hasRoadmaps ? 'secondary' : 'primary'}
+        onPress={() => router.push('/learning/roadmaps')}
+      />
+    </Card>
   );
 }
 
@@ -442,6 +448,8 @@ export default function LearningHome() {
   // Which roadmap is generating, not just whether one is: with several cards on
   // screen, a shared flag spins all of them at once.
   const [generatingFor, setGeneratingFor] = useState<string | null>(null);
+  const colors = useColors();
+  const wide = useWideNav();
 
   useFocusEffect(
     useCallback(() => {
@@ -495,123 +503,114 @@ export default function LearningHome() {
   const running = focus?.roadmaps.length ?? 0;
   const maxActive = stats?.roadmaps.max_active ?? running;
   const parked = stats?.roadmaps.paused ?? 0;
+  const tiles = stats ? statTiles(stats) : [];
 
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1 }}>
-      <View className="flex-1 bg-gray-50">
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.bg }}>
+      <View className="bg-bg flex-1">
         <ScreenHeader
           title="Today"
           subtitle={caughtUp ? "You're all caught up" : `${unreadDigests.length} to catch up on`}
-          right={
-            <>
-              <TouchableOpacity
-                onPress={() => router.push('/learning/roadmaps')}
-                className="rounded-lg bg-gray-100 px-3 py-2">
-                <Text className="text-xs font-medium text-gray-700">Roadmaps</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => router.push('/learning/notes')}
-                className="rounded-lg bg-gray-100 px-3 py-2">
-                <Text className="text-xs font-medium text-gray-700">Notes</Text>
-              </TouchableOpacity>
-            </>
-          }
-        />
+          // The sidebar carries its own drawer opener, so on wide screens this
+          // would be the second button on screen doing the same thing.
+          showMenu={!wide}
+          actions={<ThemeToggle />}>
+          <SectionNav />
+        </ScreenHeader>
 
-        {!!stats && <StatsRow stats={stats} />}
-
-        <ScrollView className="flex-1 p-4" contentContainerStyle={{ paddingBottom: 32 }}>
-          {!!error && (
-            <View className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3">
-              <Text className="text-xs text-red-700">{error}</Text>
-            </View>
-          )}
-
-          {!!focus && (
-            <>
-              {/* The schedule is one account-wide setting, so it's stated once
-                here rather than repeated on every card. */}
-              <View className="mb-2 flex-row items-baseline justify-between">
-                <Text className="text-xs font-semibold tracking-wide text-gray-400 uppercase">
-                  {running > 0 ? `Running · ${running} of ${maxActive}` : 'Roadmaps'}
-                </Text>
-                <Text className="text-[11px] text-gray-400">
-                  {focus.next_at
-                    ? `Next digest ${untilNext(focus.next_at)}`
-                    : 'No digest scheduled'}
-                </Text>
+        <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 40 }}>
+          <PageBody className="pt-3">
+            {tiles.length > 0 && (
+              <View className="mb-4">
+                <StatsGrid stats={tiles} />
               </View>
+            )}
 
-              {focus.roadmaps.length === 0 ? (
-                <NoActiveRoadmaps hasRoadmaps={(stats?.roadmaps.total ?? 0) > 0} />
-              ) : (
-                focus.roadmaps.map((item) => (
-                  <FocusCard
-                    key={item.roadmapId}
-                    focus={item}
-                    onGenerate={() => handleGenerate(item.roadmapId, item.topic?.id)}
-                    generating={generatingFor === item.roadmapId}
-                  />
-                ))
-              )}
+            {!!error && (
+              <View className="border-danger bg-danger-soft mb-3 rounded-xl border p-3">
+                <Text className="text-danger text-[13px]">{error}</Text>
+              </View>
+            )}
 
-              {/* A free slot is only worth mentioning once there's something to
-                put in it. */}
-              {running < maxActive && parked > 0 && (
-                <TouchableOpacity
-                  onPress={() => router.push('/learning/roadmaps')}
-                  className="mb-3 flex-row items-center justify-between rounded-xl border border-dashed border-violet-200 bg-violet-50 px-3 py-2.5"
-                  activeOpacity={0.8}>
-                  <Text className="flex-1 text-xs text-violet-700" numberOfLines={1}>
-                    {maxActive - running === 1
-                      ? '1 free slot'
-                      : `${maxActive - running} free slots`}{' '}
-                    — resume a paused roadmap
-                  </Text>
-                  <Text className="text-violet-400">→</Text>
-                </TouchableOpacity>
-              )}
-            </>
-          )}
+            {!!focus && (
+              <>
+                {/* The schedule is one account-wide setting, so with several
+                    roadmaps running it's stated once here rather than repeated
+                    on each card; with one, it belongs beside that card's action. */}
+                {running !== 1 && (
+                  <View className="mb-2 flex-row items-baseline justify-between gap-2">
+                    <SectionLabel>
+                      {running > 0 ? `Running · ${running} of ${maxActive}` : 'Roadmaps'}
+                    </SectionLabel>
+                    <Text className="text-ink-faint text-[11px]">
+                      {focus.next_at
+                        ? `Next digest ${untilNext(focus.next_at)}`
+                        : 'No digest scheduled'}
+                    </Text>
+                  </View>
+                )}
 
-          {reviews.length > 0 && (
-            <TouchableOpacity
-              onPress={() => router.push(`/learning/${reviews[0].roadmapId}`)}
-              className="mb-3 flex-row items-center justify-between rounded-xl border border-amber-200 bg-amber-50 p-3"
-              activeOpacity={0.8}>
-              <Text className="flex-1 text-xs text-amber-800" numberOfLines={1}>
-                🔁 {reviews.length} {reviews.length === 1 ? 'topic' : 'topics'} due for review
-              </Text>
-              <Text className="text-amber-400">→</Text>
-            </TouchableOpacity>
-          )}
+                {focus.roadmaps.length === 0 ? (
+                  <NoActiveRoadmaps hasRoadmaps={(stats?.roadmaps.total ?? 0) > 0} />
+                ) : (
+                  focus.roadmaps.map((item) => (
+                    <FocusCard
+                      key={item.roadmapId}
+                      focus={item}
+                      nextAt={running === 1 ? focus.next_at : null}
+                      onGenerate={() => handleGenerate(item.roadmapId, item.topic?.id)}
+                      generating={generatingFor === item.roadmapId}
+                    />
+                  ))
+                )}
 
-          {!!stats?.mastery && <WeakestTopics mastery={stats.mastery} />}
+                {/* A free slot is only worth mentioning once there's something to
+                    put in it. */}
+                {running < maxActive && parked > 0 && (
+                  <TouchableOpacity
+                    onPress={() => router.push('/learning/roadmaps')}
+                    className="border-primary bg-primary-soft mb-3 flex-row items-center justify-between gap-2 rounded-xl border-[1.5px] border-dashed px-3.5 py-3"
+                    activeOpacity={0.8}>
+                    <Text className="text-primary flex-1 text-[13px] font-medium" numberOfLines={1}>
+                      {maxActive - running === 1
+                        ? '1 free slot'
+                        : `${maxActive - running} free slots`}{' '}
+                      — resume a paused roadmap
+                    </Text>
+                    <Text className="text-primary text-[13px]">→</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
 
-          {!caughtUp && (
-            <Text className="mt-1 mb-2 text-xs font-semibold tracking-wide text-gray-400 uppercase">
-              To catch up on
-            </Text>
-          )}
+            {reviews.length > 0 && (
+              <TouchableOpacity
+                onPress={() => router.push(`/learning/${reviews[0].roadmapId}`)}
+                className="border-warning bg-warning-soft mb-3 flex-row items-center justify-between gap-2 rounded-xl border px-3.5 py-3"
+                activeOpacity={0.8}>
+                <Text className="text-warning flex-1 text-[13px] font-medium" numberOfLines={1}>
+                  🔁 {reviews.length} {reviews.length === 1 ? 'topic' : 'topics'} due for review
+                </Text>
+                <Text className="text-warning text-[13px]">→</Text>
+              </TouchableOpacity>
+            )}
 
-          {unreadDigests.map((d) => (
-            <DigestCard
-              key={d._id}
-              digest={d}
-              failure={digestQuizFailures[d._id]}
-              busy={busy === d._id}
-              onMark={(answers, next) => handleMark(d, answers, next)}
-            />
-          ))}
+            {!!stats?.mastery && <WeakestTopics mastery={stats.mastery} />}
 
-          {/* No big empty state: the cards above already say what's underway and
-            when the next digest lands, which is the useful answer to an empty
-            queue. */}
-          {caughtUp && running > 0 && (
-            <Text className="py-6 text-center text-xs text-gray-400">
-              ✨ Nothing to catch up on
-            </Text>
-          )}
+            {!caughtUp && <SectionLabel>Today&apos;s digest</SectionLabel>}
+
+            {unreadDigests.map((d) => (
+              <DigestCard
+                key={d._id}
+                digest={d}
+                failure={digestQuizFailures[d._id]}
+                busy={busy === d._id}
+                onMark={(answers, next) => handleMark(d, answers, next)}
+              />
+            ))}
+
+            {caughtUp && running > 0 && <CaughtUp hasRoadmaps />}
+          </PageBody>
         </ScrollView>
       </View>
     </SafeAreaView>

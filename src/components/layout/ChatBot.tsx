@@ -240,7 +240,7 @@ function ProposalCard({
       {(p?.topics ?? []).length > 0 && (
         <View className="mb-4 rounded-lg bg-white p-3">
           <Text className="mb-2 text-xs font-semibold text-gray-500">{p.topics.length} topics</Text>
-          {p.topics.slice(0, 5).map((t, i) => {
+          {p.topics.map((t, i) => {
             const duration = formatMinutes(t.estimated_minutes);
             return (
               <Text key={i} className="mb-1 text-xs text-gray-700">
@@ -249,9 +249,6 @@ function ProposalCard({
               </Text>
             );
           })}
-          {p.topics.length > 5 && (
-            <Text className="text-xs text-gray-400">+{p.topics.length - 5} more…</Text>
-          )}
         </View>
       )}
 

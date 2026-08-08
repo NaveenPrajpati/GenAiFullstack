@@ -1,8 +1,10 @@
 import DrawerContent from '@/components/layout/DrawerContent';
+import { useColors, useTheme, useThemeSync } from '@/components/ui/theme';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { DrawerToggleButton } from '@react-navigation/drawer';
 import { usePathname, useRouter, useSegments } from 'expo-router';
 import { Drawer } from 'expo-router/drawer';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import { useWindowDimensions } from 'react-native';
 import Toast from 'react-native-toast-message';
@@ -14,6 +16,7 @@ function AppDrawer() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const { width } = useWindowDimensions();
+  const colors = useColors();
   // Remembers the protected route a signed-out user was trying to reach (e.g. a
   // shared /rag-chatbot link) so we can send them there once they log in.
   const pendingRedirect = useRef<string | null>(null);
@@ -49,10 +52,13 @@ function AppDrawer() {
       drawerContent={(props) => <DrawerContent {...props} />}
       screenOptions={{
         // headerTitle: 'All apps',
-        headerStyle: { backgroundColor: '#ffffff', elevation: 0, shadowOpacity: 0 },
+        headerStyle: { backgroundColor: colors.bg, elevation: 0, shadowOpacity: 0 },
+        headerTintColor: colors.ink,
+        headerTitleStyle: { color: colors.ink },
         headerShadowVisible: false,
+        sceneStyle: { backgroundColor: colors.bg },
 
-        headerLeft: () => <DrawerToggleButton tintColor="#374151" />,
+        headerLeft: () => <DrawerToggleButton tintColor={colors.inkSoft} />,
         // drawerType: !showDrawer ? 'front' : isMobile ? 'front' : 'permanent',
         drawerStyle: { width: 256, backgroundColor: '#111827' },
         swipeEnabled: showDrawer && isMobile,
@@ -79,8 +85,15 @@ function AppDrawer() {
 }
 
 export default function MainLayout() {
+  // Restores the saved light/dark choice and, until one is made, keeps the app
+  // tied to the OS. Mounted above the navigator so the first paint is already
+  // in the right direction.
+  useThemeSync();
+  const scheme = useTheme((s) => s.scheme);
+
   return (
     <AuthProvider>
+      <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <AppDrawer />
       <Toast />
     </AuthProvider>

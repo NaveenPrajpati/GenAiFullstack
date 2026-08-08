@@ -3,3 +3,129 @@
 @import 'tailwindcss/utilities.css';
 
 @import 'nativewind/theme';
+
+/**
+ * Design tokens — Direction A "Clarity" (light) and Direction B "Deep Focus" (dark).
+ *
+ * Every colour in the app goes through a *semantic* token (`bg-surface`,
+ * `text-ink`, `border-line`, `bg-primary`…), never a raw palette step. That is
+ * what lets one set of class names render both directions: the utilities compile
+ * to `var(--color-…)`, and the blocks below re-point those variables per scheme.
+ * The alternative — `dark:` on every element — has to be repeated on each new
+ * component and silently rots the moment one is forgotten.
+ *
+ * `@theme` holds the light values, so light is what you get with no scheme
+ * information at all.
+ */
+@theme {
+  /* surfaces */
+  --color-bg: #f4f4ef;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f0f0eb;
+  --color-line: #e4e4dc;
+
+  /* text */
+  --color-ink: #16160f;
+  --color-ink-soft: #5c5c55;
+  --color-ink-faint: #8a8a80;
+
+  /* single accent */
+  --color-primary: #5b5bd6;
+  --color-primary-soft: #ececfb;
+  --color-on-primary: #ffffff;
+
+  /* status */
+  --color-success: #5f8f57;
+  --color-success-soft: #e7f0e4;
+  --color-warning: #c9a93f;
+  --color-warning-soft: #f7f0d9;
+  --color-danger: #b04a3a;
+  --color-danger-soft: #f8e5e1;
+  --color-streak: #be8134;
+  --color-streak-soft: #f6ebda;
+}
+
+/* Direction B — follows the OS on native, and on web when the user has made no
+   explicit choice. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #101219;
+    --color-surface: #1a1d26;
+    --color-surface-alt: #232733;
+    --color-line: #2c3140;
+
+    --color-ink: #edeef3;
+    --color-ink-soft: #a9afbf;
+    --color-ink-faint: #7a8194;
+
+    --color-primary: #8ecae6;
+    --color-primary-soft: #16323f;
+    --color-on-primary: #0d1017;
+
+    --color-success: #7fa972;
+    --color-success-soft: #1c2a1f;
+    --color-warning: #d6bc4e;
+    --color-warning-soft: #2c2716;
+    --color-danger: #c86b5c;
+    --color-danger-soft: #2e1b18;
+    --color-streak: #d08a48;
+    --color-streak-soft: #2e2016;
+  }
+}
+
+/**
+ * The manual toggle, web only.
+ *
+ * Native flips schemes through `Appearance.setColorScheme`, which the media
+ * query above already answers to. The browser has no such switch — CSS can only
+ * read the OS preference — so on web the toggle puts a class on <html> and these
+ * two rules (higher specificity than the bare `:root` above) win in either
+ * direction. Keep the values identical to their counterparts above.
+ */
+:root.dark {
+  --color-bg: #101219;
+  --color-surface: #1a1d26;
+  --color-surface-alt: #232733;
+  --color-line: #2c3140;
+
+  --color-ink: #edeef3;
+  --color-ink-soft: #a9afbf;
+  --color-ink-faint: #7a8194;
+
+  --color-primary: #8ecae6;
+  --color-primary-soft: #16323f;
+  --color-on-primary: #0d1017;
+
+  --color-success: #7fa972;
+  --color-success-soft: #1c2a1f;
+  --color-warning: #d6bc4e;
+  --color-warning-soft: #2c2716;
+  --color-danger: #c86b5c;
+  --color-danger-soft: #2e1b18;
+  --color-streak: #d08a48;
+  --color-streak-soft: #2e2016;
+}
+
+:root.light {
+  --color-bg: #f4f4ef;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f0f0eb;
+  --color-line: #e4e4dc;
+
+  --color-ink: #16160f;
+  --color-ink-soft: #5c5c55;
+  --color-ink-faint: #8a8a80;
+
+  --color-primary: #5b5bd6;
+  --color-primary-soft: #ececfb;
+  --color-on-primary: #ffffff;
+
+  --color-success: #5f8f57;
+  --color-success-soft: #e7f0e4;
+  --color-warning: #c9a93f;
+  --color-warning-soft: #f7f0d9;
+  --color-danger: #b04a3a;
+  --color-danger-soft: #f8e5e1;
+  --color-streak: #be8134;
+  --color-streak-soft: #f6ebda;
+}

@@ -1,3 +1,5 @@
+import ScreenHeader from '@/components/ui/ScreenHeader';
+import SectionNav from '@/components/ui/SectionNav';
 import { NOTE_KINDS, NoteRow } from '@/features/learning/components/Notes';
 import { useLearningStore } from '@/features/learning/store';
 import type { NoteKind } from '@/features/learning/types';
@@ -11,8 +13,7 @@ import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'rea
  */
 export default function NotesScreen() {
   const router = useRouter();
-  const { notes, notesLoading, fetchNotes, toggleNoteResolved, removeNote } =
-    useLearningStore();
+  const { notes, notesLoading, fetchNotes, toggleNoteResolved, removeNote } = useLearningStore();
   const [kind, setKind] = useState<NoteKind | null>(null);
 
   useFocusEffect(
@@ -27,23 +28,25 @@ export default function NotesScreen() {
   const rest = notes.filter((n) => !(n.kind === 'question' && !n.resolved));
 
   return (
-    <View className="flex-1 bg-gray-50">
-      <View className="border-b border-gray-200 bg-white px-5 py-4">
-        <Text className="text-xl font-bold text-gray-900">My notes</Text>
-        <Text className="mt-0.5 text-sm text-gray-500">
-          {notes.length} saved across your roadmaps
-        </Text>
+    <View className="bg-bg flex-1">
+      <ScreenHeader
+        title="My notes"
+        subtitle={`${notes.length} saved across your roadmaps`}
+        showMenu={false}>
+        <SectionNav />
 
-        <View className="mt-3 flex-row flex-wrap gap-1.5">
+        {/* Kind filters are a second, narrower axis than the section nav, so they
+            sit under it rather than competing with it. */}
+        <View className="mt-2 flex-row flex-wrap gap-1.5">
           <TouchableOpacity
             onPress={() => setKind(null)}
             className={`rounded-lg border px-2.5 py-1 ${
-              kind === null ? 'border-violet-400 bg-violet-50' : 'border-gray-200 bg-white'
+              kind === null ? 'border-primary bg-primary-soft' : 'border-line bg-surface'
             }`}
             activeOpacity={0.7}>
             <Text
               className={`text-[11px] ${
-                kind === null ? 'font-medium text-violet-700' : 'text-gray-500'
+                kind === null ? 'text-primary font-medium' : 'text-ink-soft'
               }`}>
               All
             </Text>
@@ -53,19 +56,19 @@ export default function NotesScreen() {
               key={k.kind}
               onPress={() => setKind(k.kind)}
               className={`rounded-lg border px-2.5 py-1 ${
-                kind === k.kind ? 'border-violet-400 bg-violet-50' : 'border-gray-200 bg-white'
+                kind === k.kind ? 'border-primary bg-primary-soft' : 'border-line bg-surface'
               }`}
               activeOpacity={0.7}>
               <Text
                 className={`text-[11px] ${
-                  kind === k.kind ? 'font-medium text-violet-700' : 'text-gray-500'
+                  kind === k.kind ? 'text-primary font-medium' : 'text-ink-soft'
                 }`}>
                 {k.icon} {k.label}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
-      </View>
+      </ScreenHeader>
 
       <ScrollView className="flex-1 p-4" contentContainerStyle={{ paddingBottom: 32 }}>
         {notesLoading && notes.length === 0 && (
@@ -79,8 +82,8 @@ export default function NotesScreen() {
             <Text className="mb-2 text-4xl">📝</Text>
             <Text className="mb-1 text-base font-semibold text-gray-900">Nothing saved yet</Text>
             <Text className="text-center text-sm leading-relaxed text-gray-500">
-              Open a topic on any roadmap to jot a note, keep a snippet, bookmark a link, or park
-              a question.
+              Open a topic on any roadmap to jot a note, keep a snippet, bookmark a link, or park a
+              question.
             </Text>
           </View>
         )}

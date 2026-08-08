@@ -1,3 +1,5 @@
+import ScreenHeader from '@/components/ui/ScreenHeader';
+import SectionNav from '@/components/ui/SectionNav';
 import { useLearningStore } from '@/features/learning/store';
 import type { Difficulty, Memory } from '@/features/learning/types';
 import { useEffect, useState } from 'react';
@@ -171,11 +173,13 @@ export default function SettingsScreen() {
     setForm((f) => ({ ...f, [key]: value }));
 
   return (
-    <View className="flex-1 bg-gray-50">
-      {/* Header */}
-      <View className="border-b border-gray-200 bg-white px-5 py-4">
-        <Text className="mt-1 text-sm text-gray-500">Personalize your learning experience</Text>
-      </View>
+    <View className="bg-bg flex-1">
+      <ScreenHeader
+        title="Settings"
+        subtitle="Personalize your learning experience"
+        showMenu={false}>
+        <SectionNav />
+      </ScreenHeader>
 
       <ScrollView className="flex-1 p-4" contentContainerStyle={{ paddingBottom: 32 }}>
         {/* Daily Digest Toggle */}

@@ -1,4 +1,4 @@
-import ScreenHeader from '@/components/layout/ScreenHeader';
+import ScreenHeader from '@/components/ui/ScreenHeader';
 import {
   AgendaCard,
   ApprovalCard,
@@ -131,7 +131,7 @@ export default function AssistantChatScreen() {
   };
 
   return (
-    <View className="flex-1 bg-gray-50">
+    <View className="bg-bg flex-1">
       <ScreenHeader
         title="Personal Assistant"
         subtitle="Your AI agent for tasks & more"

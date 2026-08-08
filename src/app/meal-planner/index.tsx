@@ -1,4 +1,4 @@
-import ScreenHeader from '@/components/layout/ScreenHeader';
+import ScreenHeader from '@/components/ui/ScreenHeader';
 import {
   ConflictCard,
   ProposalCard,
@@ -147,7 +147,7 @@ export default function MealPlannerChatScreen() {
   const activePlan = plans.find((p) => p.id === activePlanId);
 
   return (
-    <View className="flex-1 bg-gray-50">
+    <View className="bg-bg flex-1">
       <ScreenHeader
         title="Meal Planner"
         subtitle={

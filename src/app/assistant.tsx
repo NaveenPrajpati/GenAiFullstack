@@ -7,7 +7,7 @@
  * by token, and any skill can pause the turn for approval without the user
  * leaving the thread.
  */
-import ScreenHeader from '@/components/layout/ScreenHeader';
+import ScreenHeader from '@/components/ui/ScreenHeader';
 import ApprovalCard from '@/features/assistant/components/ApprovalCards';
 import ResultCards from '@/features/assistant/components/ResultCards';
 import SkillTrail, { SKILL_META } from '@/features/assistant/components/SkillTrail';
@@ -72,7 +72,8 @@ function Bubble({
           className={`mb-2 max-w-[92%] rounded-2xl rounded-tl-sm px-4 py-2.5 ${
             msg.isError ? 'bg-red-50' : 'bg-gray-100'
           }`}>
-          <Text className={`text-sm leading-relaxed ${msg.isError ? 'text-red-700' : 'text-gray-800'}`}>
+          <Text
+            className={`text-sm leading-relaxed ${msg.isError ? 'text-red-700' : 'text-gray-800'}`}>
             {msg.text}
             {/* Caret while tokens are still arriving. */}
             {msg.streaming && !!msg.text && <Text className="text-gray-400">▌</Text>}
@@ -133,7 +134,7 @@ export default function UnifiedAssistantScreen() {
   const mealDown = skills?.meal && !skills.meal.available;
 
   return (
-    <View className="flex-1 bg-gray-50">
+    <View className="bg-bg flex-1">
       <ScreenHeader
         title="Assistant"
         subtitle="One chat · three skills"
@@ -192,11 +193,11 @@ export default function UnifiedAssistantScreen() {
             <View className="py-10">
               <View className="mb-6 items-center">
                 <Text className="mb-2 text-5xl">✨</Text>
-                <Text className="mb-1 text-base font-semibold text-gray-700">
-                  Ask me anything
-                </Text>
+                <Text className="mb-1 text-base font-semibold text-gray-700">Ask me anything</Text>
                 <Text className="text-center text-sm leading-relaxed text-gray-400">
-                  {"I'll bring in whichever skill fits — studying, your\ntasks, or your meals. Some questions use more than one."}
+                  {
+                    "I'll bring in whichever skill fits — studying, your\ntasks, or your meals. Some questions use more than one."
+                  }
                 </Text>
               </View>
               <View className="gap-2">
