@@ -16,8 +16,11 @@ import { font, foregroundStyle, lineLimit, padding, widgetURL } from '@expo/ui/s
 import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 
 import {
+  badge,
+  badgeCaption,
   headline,
   subline,
+  tone,
   toWidgetData,
   WIDGET_DEEP_LINK,
   type DigestWidgetData,
@@ -28,20 +31,23 @@ import type { Digest } from '../types';
 const WIDGET_NAME = 'UnreadDigests';
 
 // The queue count is the one thing readable at a glance, so it carries the
-// accent; everything else is deliberately secondary.
-const ACCENT = '#F59E0B';
-const CAUGHT_UP = '#22C55E';
+// accent; everything else is deliberately secondary. Grey for `unsynced`, so a
+// widget with no data never reads as a real result.
+const TINT = {
+  waiting: '#F59E0B',
+  caughtUp: '#22C55E',
+  unsynced: '#8E8E93',
+} as const;
 
 function UnreadDigestsLayout(props: DigestWidgetData, environment: WidgetEnvironment) {
   'widget';
 
-  const caughtUp = props.count === 0;
-  const tint = caughtUp ? CAUGHT_UP : ACCENT;
+  const tint = TINT[tone(props)];
 
   // Lock Screen accessory families are monochrome and tiny — a count and a
   // word is all that survives at that size.
   if (environment.widgetFamily === 'accessoryInline') {
-    return <Text>{caughtUp ? 'All caught up' : `${props.count} digests`}</Text>;
+    return <Text>{headline(props)}</Text>;
   }
 
   if (environment.widgetFamily === 'accessoryRectangular') {
@@ -58,10 +64,10 @@ function UnreadDigestsLayout(props: DigestWidgetData, environment: WidgetEnviron
       <HStack spacing={14} modifiers={[padding({ all: 16 }), widgetURL(WIDGET_DEEP_LINK)]}>
         <VStack alignment="leading" spacing={0}>
           <Text modifiers={[font({ size: 44, weight: 'bold' }), foregroundStyle(tint)]}>
-            {caughtUp ? '✓' : String(props.count)}
+            {badge(props)}
           </Text>
           <Text modifiers={[font({ size: 11, weight: 'medium' }), foregroundStyle('#8E8E93')]}>
-            {caughtUp ? 'done' : 'waiting'}
+            {badgeCaption(props)}
           </Text>
         </VStack>
 
@@ -90,10 +96,10 @@ function UnreadDigestsLayout(props: DigestWidgetData, environment: WidgetEnviron
       spacing={4}
       modifiers={[padding({ all: 14 }), widgetURL(WIDGET_DEEP_LINK)]}>
       <Text modifiers={[font({ size: 40, weight: 'bold' }), foregroundStyle(tint)]}>
-        {caughtUp ? '✓' : String(props.count)}
+        {badge(props)}
       </Text>
       <Text modifiers={[font({ size: 13, weight: 'semibold' }), lineLimit(1)]}>
-        {caughtUp ? 'All caught up' : props.needsQuiz ? 'Recall check' : 'to catch up'}
+        {headline(props)}
       </Text>
       <Spacer />
       <Text modifiers={[font({ size: 11 }), foregroundStyle('#8E8E93'), lineLimit(2)]}>

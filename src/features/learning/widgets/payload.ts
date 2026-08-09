@@ -29,6 +29,15 @@ export type DigestWidgetData = {
   /** How many distinct roadmaps have something waiting — the widget says
    *  "across 2 roadmaps" only when that's actually true. */
   roadmaps: number;
+  /**
+   * False until the app has pushed real state at least once.
+   *
+   * Without this, "the app has never synced" and "you are genuinely caught up"
+   * are both `count: 0`, and the widget confidently claims you're up to date
+   * when it simply has no idea. They need different copy, so they need to be
+   * different states.
+   */
+  synced: boolean;
 };
 
 export const EMPTY_WIDGET_DATA: DigestWidgetData = {
@@ -37,6 +46,7 @@ export const EMPTY_WIDGET_DATA: DigestWidgetData = {
   roadmap: null,
   needsQuiz: false,
   roadmaps: 0,
+  synced: false,
 };
 
 /**
@@ -46,7 +56,9 @@ export const EMPTY_WIDGET_DATA: DigestWidgetData = {
  * so the first entry is "next up" — this does not re-sort them.
  */
 export function toWidgetData(digests: Digest[]): DigestWidgetData {
-  if (digests.length === 0) return EMPTY_WIDGET_DATA;
+  // An empty queue is still a real answer, so it is `synced` — unlike the
+  // untouched `EMPTY_WIDGET_DATA` the widget starts life with.
+  if (digests.length === 0) return { ...EMPTY_WIDGET_DATA, synced: true };
 
   const next = digests[0];
   return {
@@ -56,6 +68,7 @@ export function toWidgetData(digests: Digest[]): DigestWidgetData {
     // `quiz` can be present but empty; an empty check is not a check.
     needsQuiz: !!next.quizId && (next.quiz?.length ?? 0) > 0,
     roadmaps: new Set(digests.map((d) => d.roadmapId)).size,
+    synced: true,
   };
 }
 
@@ -90,13 +103,40 @@ export const WIDGET_DEEP_LINK = 'aiapps:///learning';
 
 /** One label for both platforms, so the two widgets can't drift apart. */
 export function headline(data: DigestWidgetData): string {
+  // Never claim to be caught up on the strength of no data at all.
+  if (!data.synced) return 'Not synced yet';
   if (data.count === 0) return 'All caught up';
   if (data.needsQuiz) return 'Recall check first';
   return data.count === 1 ? '1 digest waiting' : `${data.count} digests waiting`;
 }
 
+/**
+ * Which of the three states the widget is in. Shared so the two platforms tint
+ * and caption the same way — `count === 0` alone is not enough to decide, since
+ * it covers both "caught up" and "no data yet".
+ */
+export type WidgetTone = 'unsynced' | 'caughtUp' | 'waiting';
+
+export function tone(data: DigestWidgetData): WidgetTone {
+  if (!data.synced) return 'unsynced';
+  return data.count === 0 ? 'caughtUp' : 'waiting';
+}
+
+/** The single glyph the widget leads with. */
+export function badge(data: DigestWidgetData): string {
+  if (!data.synced) return '–';
+  return data.count === 0 ? '✓' : String(data.count);
+}
+
+/** The word under the glyph. */
+export function badgeCaption(data: DigestWidgetData): string {
+  if (!data.synced) return 'no data';
+  return data.count === 0 ? 'done' : 'waiting';
+}
+
 /** The second line: what the next digest is actually about. */
 export function subline(data: DigestWidgetData): string {
+  if (!data.synced) return 'Open the app to load your digests';
   if (data.count === 0) return 'Nothing to read right now';
   if (data.topic) return data.topic;
   return data.roadmaps > 1 ? `Across ${data.roadmaps} roadmaps` : 'Tap to catch up';

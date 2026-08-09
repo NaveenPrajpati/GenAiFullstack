@@ -13,7 +13,15 @@
  */
 import { FlexWidget, TextWidget } from 'react-native-android-widget';
 
-import { headline, subline, WIDGET_DEEP_LINK, type DigestWidgetData } from './payload';
+import {
+  badge,
+  badgeCaption,
+  headline,
+  subline,
+  tone,
+  WIDGET_DEEP_LINK,
+  type DigestWidgetData,
+} from './payload';
 
 type Theme = 'light' | 'dark';
 
@@ -22,8 +30,12 @@ const PALETTE = {
   dark: { bg: '#1C1C1E', ink: '#F2F2F7', faint: '#9CA3AF' },
 } as const;
 
-const ACCENT = '#F59E0B';
-const CAUGHT_UP = '#22C55E';
+const TINT = {
+  waiting: '#F59E0B',
+  caughtUp: '#22C55E',
+  // Grey, so an unsynced widget never reads as a real result either way.
+  unsynced: '#9CA3AF',
+} as const;
 
 export type UnreadDigestsAndroidProps = {
   data: DigestWidgetData;
@@ -39,8 +51,7 @@ export function UnreadDigestsAndroid({
   width = 0,
 }: UnreadDigestsAndroidProps) {
   const colors = PALETTE[theme];
-  const caughtUp = data.count === 0;
-  const tint = caughtUp ? CAUGHT_UP : ACCENT;
+  const tint = TINT[tone(data)];
   // Roughly a 2-cell-wide widget; narrower than this and only the count fits.
   const roomy = width >= 180;
 
@@ -61,13 +72,10 @@ export function UnreadDigestsAndroid({
       }}>
       <FlexWidget style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
         <TextWidget
-          text={caughtUp ? '✓' : String(data.count)}
+          text={badge(data)}
           style={{ fontSize: roomy ? 40 : 32, fontWeight: 'bold', color: tint }}
         />
-        <TextWidget
-          text={caughtUp ? 'done' : 'waiting'}
-          style={{ fontSize: 11, color: colors.faint }}
-        />
+        <TextWidget text={badgeCaption(data)} style={{ fontSize: 11, color: colors.faint }} />
       </FlexWidget>
 
       {roomy && (

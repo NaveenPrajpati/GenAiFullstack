@@ -58,9 +58,9 @@
               "name": "UnreadDigests",
               "label": "Today's digests",
               "description": "How many learning digests are waiting, and what's next up.",
-              "minWidth": "110dp",
-              "minHeight": "110dp",
-              "targetCellWidth": 2,
+              "minWidth": "320dp",
+              "minHeight": "120dp",
+              "targetCellWidth": 5,
               "targetCellHeight": 2,
               "resizeMode": "horizontal|vertical",
               "updatePeriodMillis": 1800000
@@ -73,6 +73,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
+    "backgroundColor": "#232323",
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,

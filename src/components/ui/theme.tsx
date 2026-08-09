@@ -79,6 +79,14 @@ type ThemeState = {
   scheme: Scheme;
   /** True once the user has picked a side, which stops the OS from overriding it. */
   pinned: boolean;
+  /**
+   * True once the saved choice has been read back from storage.
+   *
+   * Until then `scheme` is only the OS guess, which may be about to be replaced
+   * by the opposite value. The splash screen waits on this so the app never
+   * paints its first frame in the wrong theme and then flips.
+   */
+  hydrated: boolean;
   setScheme: (scheme: Scheme) => void;
   toggle: () => void;
 };
@@ -86,6 +94,7 @@ type ThemeState = {
 export const useTheme = create<ThemeState>((set, get) => ({
   scheme: osScheme(),
   pinned: false,
+  hydrated: false,
   setScheme: (scheme) => {
     apply(scheme);
     set({ scheme, pinned: true });
@@ -110,7 +119,10 @@ export function useThemeSync() {
         const pinned = saved === 'dark' || saved === 'light';
         const scheme: Scheme = pinned ? (saved as Scheme) : osScheme();
         apply(scheme);
-        useTheme.setState({ scheme, pinned });
+        // `hydrated` is set even when nothing was saved and even when the read
+        // failed: in both cases the OS scheme is the final answer, so there is
+        // nothing further to wait for.
+        useTheme.setState({ scheme, pinned, hydrated: true });
       });
 
     // Registered unconditionally, because the choice can also be *cleared*
