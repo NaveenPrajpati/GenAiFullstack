@@ -1,9 +1,8 @@
 import DrawerContent from '@/components/layout/DrawerContent';
 import { useColors, useTheme, useThemeSync } from '@/components/ui/theme';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
-import { DrawerToggleButton } from '@react-navigation/drawer';
 import { usePathname, useRouter, useSegments } from 'expo-router';
-import { Drawer } from 'expo-router/drawer';
+import { Drawer, DrawerToggleButton } from 'expo-router/drawer';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import { useWindowDimensions } from 'react-native';

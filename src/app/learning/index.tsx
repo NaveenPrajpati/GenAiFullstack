@@ -19,7 +19,7 @@ import type {
 } from '@/features/learning/types';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { Linking, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Linking, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const TREND_MARK: Record<MasterySummary['trend'], string> = {
@@ -254,7 +254,11 @@ function DigestCard({
 }: {
   digest: Digest;
   failure?: QuizResult;
-  onMark: (answers: { question: number; answer: number }[], generateNext: boolean) => void;
+  onMark: (
+    answers: { question: number; answer: number }[],
+    written: Record<number, string>,
+    generateNext: boolean
+  ) => void;
   busy: boolean;
 }) {
   const router = useRouter();
@@ -263,15 +267,27 @@ function DigestCard({
   // Sources are collapsed by default: they're a side door out of the digest,
   // not the thing being read.
   const [showSources, setShowSources] = useState(false);
+  const colors = useColors();
+
+  // From the fourth digest one question is answered in a sentence instead of
+  // tapped. Kept apart from `selected`, which is indexed by option.
+  const [written, setWritten] = useState<Record<number, string>>({});
 
   useEffect(() => {
     setSelected(new Array(questions.length).fill(null));
+    setWritten({});
   }, [digest._id, questions.length]);
 
-  const answered = selected.filter((s) => s !== null).length;
-  const ready = questions.length === 0 || answered === questions.length;
+  const taps = questions.filter((q) => q.kind !== 'open');
+  const answered = selected.filter((s, i) => s !== null && questions[i]?.kind !== 'open').length;
+  const writtenDone = questions.every(
+    (q, i) => q.kind !== 'open' || (written[i] ?? '').trim().length > 0
+  );
+  const ready = questions.length === 0 || (answered === taps.length && writtenDone);
   const answers = selected
-    .map((a, i) => (a !== null ? { question: i, answer: a } : null))
+    .map((a, i) =>
+      a !== null && questions[i]?.kind !== 'open' ? { question: i, answer: a } : null
+    )
     .filter((x): x is { question: number; answer: number } => x !== null);
 
   const sources = digest.resources.filter((r) => !!r.url);
@@ -335,6 +351,29 @@ function DigestCard({
                 {questions.length > 1 ? `${qIdx + 1}. ` : ''}
                 {q.question}
               </Text>
+
+              {/* One sentence, in their own words. It has to be attempted, but
+                  being wrong doesn't block the mark — the taps are the gate, and
+                  this is here for what it shows about how they're thinking. */}
+              {q.kind === 'open' && (
+                <>
+                  <TextInput
+                    value={written[qIdx] ?? ''}
+                    onChangeText={(v) => setWritten((prev) => ({ ...prev, [qIdx]: v }))}
+                    editable={!busy}
+                    multiline
+                    textAlignVertical="top"
+                    placeholder="In your own words…"
+                    placeholderTextColor={colors.inkFaint}
+                    className="border-line bg-surface text-ink min-h-[64px] rounded-xl border p-3 text-[15px] leading-relaxed"
+                    accessibilityLabel={q.question}
+                  />
+                  <Text className="text-ink-faint mt-1 text-[11px]">
+                    A sentence is plenty — the keyboard mic works too.
+                  </Text>
+                </>
+              )}
+
               {q.options.map((opt, optIdx) => {
                 const isSel = selected[qIdx] === optIdx;
                 return (
@@ -389,7 +428,7 @@ function DigestCard({
         <Button
           label="Mark"
           variant="secondary"
-          onPress={() => onMark(answers, false)}
+          onPress={() => onMark(answers, written, false)}
           disabled={!ready}
           loading={busy}
           full
@@ -398,7 +437,7 @@ function DigestCard({
             choice rather than something every acknowledgement triggers. */}
         <Button
           label="Mark & next"
-          onPress={() => onMark(answers, true)}
+          onPress={() => onMark(answers, written, true)}
           disabled={busy || !ready || digest.coverage_complete}
           full
         />
@@ -479,12 +518,13 @@ export default function LearningHome() {
   const handleMark = async (
     digest: Digest,
     answers: { question: number; answer: number }[],
+    written: Record<number, string>,
     generateNext: boolean
   ) => {
     setBusy(digest._id);
     setError('');
     try {
-      const result = await markDigest(digest._id, { answers, generateNext });
+      const result = await markDigest(digest._id, { answers, written, generateNext });
       if (generateNext && !result.generated) {
         setError("Nothing new to send yet — you're up to date on that topic.");
       }
@@ -606,7 +646,7 @@ export default function LearningHome() {
                 digest={d}
                 failure={digestQuizFailures[d._id]}
                 busy={busy === d._id}
-                onMark={(answers, next) => handleMark(d, answers, next)}
+                onMark={(answers, written, next) => handleMark(d, answers, written, next)}
               />
             ))}
 

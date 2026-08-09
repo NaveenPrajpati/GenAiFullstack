@@ -3,6 +3,7 @@
     "name": "ai-app",
     "slug": "ai-app",
     "scheme": "aiapps",
+    "owner": "naveenoo7",
     "version": "1.0.0",
     "web": {
       "favicon": "./assets/favicon.png",
@@ -12,15 +13,66 @@
     "experiments": {
       "tsconfigPaths": true
     },
-    "plugins": ["expo-router", "react-native-enriched-markdown"],
+    "plugins": [
+      "expo-router",
+      "react-native-enriched-markdown",
+      "expo-status-bar",
+      "expo-notifications",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#232323",
+          "image": "./assets/splash.jpg",
+          "dark": {
+            "image": "./assets/splash-icon-dark.jpg",
+            "backgroundColor": "#000000"
+          },
+          "imageWidth": 200
+        }
+      ],
+      [
+        "expo-widgets",
+        {
+          "widgets": [
+            {
+              "name": "UnreadDigests",
+              "displayName": "Today's digests",
+              "description": "How many learning digests are waiting, and what's next up.",
+              "ios": {
+                "supportedFamilies": [
+                  "systemSmall",
+                  "systemMedium",
+                  "accessoryRectangular",
+                  "accessoryInline"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "UnreadDigests",
+              "label": "Today's digests",
+              "description": "How many learning digests are waiting, and what's next up.",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
+      ],
+      "./plugins/withWorkManagerFix"
+    ],
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/splash.jpg",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,

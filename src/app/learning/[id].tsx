@@ -7,14 +7,24 @@ import ScreenHeader from '@/components/ui/ScreenHeader';
 import { useColors } from '@/components/ui/theme';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { CheckpointCard } from '@/features/learning/components/CheckpointCard';
+import { FeynmanCard } from '@/features/learning/components/FeynmanCard';
 import { NoteComposer, NoteRow } from '@/features/learning/components/Notes';
 import { useLearningStore } from '@/features/learning/store';
-import type { Roadmap, RoadmapInsights, TopicNode } from '@/features/learning/types';
+import type {
+  ExplanationResult,
+  Roadmap,
+  RoadmapInsights,
+  TopicNode,
+} from '@/features/learning/types';
 import { formatMinutes, isCompleted } from '@/features/learning/types';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+/** Mirrors FEYNMAN_MIN_WORDS on the server: below this there is nothing to
+ *  judge, and the API refuses it. Shown as guidance before that happens. */
+const FEYNMAN_MIN_WORDS = 20;
 
 const FIELD_LABELS: Record<string, string> = {
   skill_level: 'Level',
@@ -203,6 +213,7 @@ export default function RoadmapDetail() {
     startCheckpoint,
     submitCheckpoint,
     closeCheckpoint,
+    explainTopic,
     insights,
     fetchInsights,
     sendChatMessage,
@@ -223,6 +234,26 @@ export default function RoadmapDetail() {
   const [justFinished, setJustFinished] = useState('');
   /** Which topic's notes section is open — one at a time, like the topics. */
   const [notesOpen, setNotesOpen] = useState<string | null>(null);
+  /** The Feynman checkpoint: which topic is being judged, the verdict when it
+   *  lands, and any failure. Local rather than in the store — it's one card's
+   *  transient state, and nothing else in the app reads it. */
+  const [explaining, setExplaining] = useState<string | null>(null);
+  const [explanation, setExplanation] = useState<ExplanationResult | null>(null);
+  const [explainError, setExplainError] = useState('');
+
+  const handleExplain = async (topicId: string, text: string) => {
+    setExplainError('');
+    setExplaining(topicId);
+    try {
+      // `source: 'voice'` would be set by a real recorder; dictation arrives
+      // through the keyboard as ordinary text and is indistinguishable here.
+      setExplanation(await explainTopic(topicId, { roadmapId: id, text }));
+    } catch (e: any) {
+      setExplainError(e?.message ?? 'Could not read that just now.');
+    } finally {
+      setExplaining(null);
+    }
+  };
   const scrollRef = useRef<ScrollView>(null);
   // y offset of each topic card, captured on layout, so auto-advance can scroll
   // the next topic into view.
@@ -691,6 +722,26 @@ export default function RoadmapDetail() {
                                     onClose={closeCheckpoint}
                                   />
                                 )}
+
+                                {/* Offered once the topic is ready to be completed, and
+                                    withdrawn once it's been earned — asking someone to
+                                    explain the same topic twice pays out nothing the
+                                    second time. */}
+                                {(topic.progress_status === 'needs_review' ||
+                                  topic.progress_status === 'completed') &&
+                                  !topic.feynman_passed && (
+                                    <FeynmanCard
+                                      title={topic.title}
+                                      minWords={FEYNMAN_MIN_WORDS}
+                                      result={
+                                        explanation?.topicId === topic.id ? explanation : null
+                                      }
+                                      busy={explaining === topic.id}
+                                      error={explainError}
+                                      onSubmit={(text) => handleExplain(topic.id, text)}
+                                      onDismiss={() => setExplanation(null)}
+                                    />
+                                  )}
                               </Card>
                             )}
                           </View>

@@ -9,6 +9,7 @@
  */
 import { create } from 'zustand';
 import * as api from './learningApi';
+import { syncDigestWidget } from './widgets/sync';
 import type {
   ChatMessage,
   ChatResultData,
@@ -20,6 +21,7 @@ import type {
   DueReview,
   LearningFocus,
   LearningNote,
+  ExplanationResult,
   LearningStats,
   Memory,
   NoteKind,
@@ -250,8 +252,19 @@ type LearningState = {
   fetchFocus: () => Promise<void>;
   markDigest: (
     digestId: string,
-    opts?: { answers?: { question: number; answer: number }[]; generateNext?: boolean }
+    opts?: {
+      answers?: { question: number; answer: number }[];
+      /** Typed answers to open questions, keyed by position. */
+      written?: Record<number, string>;
+      generateNext?: boolean;
+    }
   ) => Promise<DigestMarkResult>;
+  /** Submit a Feynman explanation. Optional and never a gate — resolves to the
+   *  judgement, rejects only when the call itself failed. */
+  explainTopic: (
+    topicId: string,
+    body: { roadmapId: string; text: string; source?: 'text' | 'voice' }
+  ) => Promise<ExplanationResult>;
   /** Grading of the last failed recall check, keyed by digest id, so the card
    *  can show what was wrong without the store owning per-card state. */
   digestQuizFailures: Record<string, QuizResult>;
@@ -379,6 +392,7 @@ export const useLearningStore = create<LearningState>((set, get) => ({
       digests: s.digests.filter((d) => d.roadmapId !== roadmapId),
       reviews: s.reviews.filter((r) => r.roadmapId !== roadmapId),
     }));
+    syncDigestWidget(get().unreadDigests);
     get().fetchStats();
     get().fetchFocus();
     return linked;
@@ -527,6 +541,37 @@ export const useLearningStore = create<LearningState>((set, get) => ({
     }
   },
   closeCheckpoint: () => set({ checkpoint: null, checkpointOutcome: null, checkpointError: '' }),
+
+  explainTopic: async (topicId, body) => {
+    try {
+      const data = await api.explainTopic(topicId, body);
+      // The topic now carries the ladder credit; reflect it so the card can stop
+      // offering the exercise it has already been given.
+      if (data?.result?.passed) {
+        set((s) => ({
+          roadmaps: s.roadmaps.map((r) =>
+            r._id === body.roadmapId
+              ? {
+                  ...r,
+                  topics: r.topics.map((t) =>
+                    t.id === topicId
+                      ? { ...t, feynman_passed: true, feynman_score: data.result.score }
+                      : t
+                  ),
+                }
+              : r
+          ),
+        }));
+      }
+      return data.result as ExplanationResult;
+    } catch (e: any) {
+      const detail = e?.response?.data?.detail;
+      throw new Error(
+        (typeof detail === 'string' ? detail : detail?.message) ??
+          "Couldn't read that just now — try again shortly."
+      );
+    }
+  },
 
   selectedTopic: null,
   setSelectedTopic: (topic) => set({ selectedTopic: topic }),
@@ -740,6 +785,7 @@ export const useLearningStore = create<LearningState>((set, get) => ({
     try {
       const data = await api.getDigests({ status: 'unread', active_only: true, limit: 50 });
       set({ unreadDigests: data.result ?? [] });
+      syncDigestWidget(get().unreadDigests);
     } catch {
       // The catch-up prompt is additive; never let it break the screen.
     }
@@ -762,6 +808,7 @@ export const useLearningStore = create<LearningState>((set, get) => ({
     try {
       const data = await api.markDigest(digestId, {
         answers: opts.answers,
+        written: opts.written,
         generate_next: opts.generateNext,
       });
       const result: DigestMarkResult = data.result;
@@ -778,6 +825,7 @@ export const useLearningStore = create<LearningState>((set, get) => ({
           Object.entries(s.digestQuizFailures).filter(([k]) => k !== digestId)
         ),
       }));
+      syncDigestWidget(get().unreadDigests);
       return result;
     } catch (e: any) {
       // 422 means the recall check was wrong, and the body carries the grading.
@@ -801,6 +849,7 @@ export const useLearningStore = create<LearningState>((set, get) => ({
         unreadDigests: [digest, ...s.unreadDigests],
         digests: [digest, ...s.digests],
       }));
+      syncDigestWidget(get().unreadDigests);
       return digest;
     } catch (e: any) {
       set({

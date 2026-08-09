@@ -52,6 +52,11 @@ export type TopicNode = {
   mastery_score?: number;
   completed_at?: string;
   next_review_at?: string;
+  /** Set once the topic has been explained well in the learner's own words.
+   *  Spent at the next checkpoint for an extra rung of the review ladder. */
+  feynman_passed?: boolean;
+  feynman_score?: number | null;
+  feynman_at?: string | null;
 };
 
 export type Roadmap = {
@@ -172,7 +177,36 @@ export type Memory = {
 
 export type QuizQuestion = {
   question: string;
+  /** Empty on an `open` question — there is nothing to pick from. */
   options: string[];
+  /** `open` questions are answered in a sentence and graded by an LLM. They
+   *  never count toward the pass mark; they exist for the diagnosis. */
+  kind?: 'choice' | 'open';
+};
+
+/** How one learning outcome fared in a learner's own-words explanation. */
+export type OutcomeVerdict = {
+  outcome: string;
+  verdict: 'solid' | 'partial' | 'missing' | 'wrong';
+  evidence?: string | null;
+};
+
+/** The result of the Feynman checkpoint — explaining a topic in your own words. */
+export type ExplanationResult = {
+  passed: boolean;
+  pass_score: number;
+  score: number;
+  outcomes: OutcomeVerdict[];
+  strengths: string[];
+  gaps: string[];
+  /** Beliefs the explanation revealed as wrong. These reach the misconception
+   *  tracker, which is the real reason this is worth doing. */
+  misconceptions: { label: string; detail: string }[];
+  feedback: string;
+  /** Extra rungs of the review ladder that passing just bought. */
+  ladder_bonus: number;
+  topicId: string;
+  roadmapId: string;
 };
 
 export type QuizResult = {

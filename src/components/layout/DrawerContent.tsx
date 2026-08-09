@@ -1,5 +1,5 @@
 import { useAuth } from '@/context/AuthContext';
-import { DrawerContentComponentProps, DrawerContentScrollView } from '@react-navigation/drawer';
+import { DrawerContentComponentProps, DrawerContentScrollView } from 'expo-router/drawer';
 import { usePathname, useRouter } from 'expo-router';
 import * as Updates from 'expo-updates';
 import { useCallback, useEffect, useState } from 'react';
@@ -169,9 +169,7 @@ export default function DrawerContent(props: DrawerContentComponentProps) {
           </View>
           <View className="flex-1">
             <Text className="text-base font-semibold text-white">AI Toolkit</Text>
-            <Text className="text-xs text-gray-400">
-              {isActive('/') ? 'Home' : 'Tap for home'}
-            </Text>
+            <Text className="text-xs text-gray-400">{isActive('/') ? 'Home' : 'Tap for home'}</Text>
           </View>
           {isActive('/') && <View className="h-1.5 w-1.5 rounded-full bg-indigo-400" />}
         </View>

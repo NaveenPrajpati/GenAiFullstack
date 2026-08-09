@@ -174,6 +174,25 @@ export async function startCheckpoint(topicId: string, roadmapId: string, regene
   return res.data;
 }
 
+/**
+ * POST /topics/:topicId/explain — the Feynman checkpoint.
+ *
+ * Optional and never a gate: a poor explanation costs nothing. Passing buys an
+ * extra rung of the review ladder, and the judgement feeds the misconception
+ * tracker with something no multiple-choice answer can give.
+ *
+ * `source` says whether the text was dictated. The server takes a transcript
+ * either way, so swapping the device keyboard's mic for real speech-to-text is
+ * a client-side change with no contract to renegotiate.
+ */
+export async function explainTopic(
+  topicId: string,
+  body: { roadmapId: string; text: string; source?: 'text' | 'voice' }
+) {
+  const res = await http.post(`/learning/topics/${topicId}/explain`, body);
+  return res.data;
+}
+
 /** POST /checkpoint/submit — grade it. Passing is what completes the topic. */
 export async function submitCheckpoint(
   quizId: string,
@@ -284,11 +303,15 @@ export async function markDigest(
   digestId: string,
   body: {
     answers?: { question: number; answer: number }[];
+    /** Typed answers to `open` questions, keyed by position. Required when the
+     *  check carries one — a blank is refused, a wrong one is not. */
+    written?: Record<number, string>;
     generate_next?: boolean;
   } = {}
 ) {
   const res = await http.post(`/learning/digests/${digestId}/mark`, {
     answers: body.answers ?? [],
+    written: body.written ?? {},
     generate_next: body.generate_next ?? false,
   });
   return res.data;

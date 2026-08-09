@@ -1,4 +1,4 @@
-import { DrawerActions } from '@react-navigation/native';
+import { DrawerActions } from 'expo-router/react-navigation';
 import { useNavigation, useRouter } from 'expo-router';
 import { ChevronLeftIcon, MenuIcon } from 'lucide-react-native';
 import type { ReactNode } from 'react';

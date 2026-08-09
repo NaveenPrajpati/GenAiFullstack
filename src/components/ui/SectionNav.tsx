@@ -1,4 +1,4 @@
-import { DrawerActions } from '@react-navigation/native';
+import { DrawerActions } from 'expo-router/react-navigation';
 import { useNavigation, usePathname, useRouter } from 'expo-router';
 import { ScrollView, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 
