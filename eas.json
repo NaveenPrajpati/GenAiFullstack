@@ -18,6 +18,9 @@
       "android": {
         "buildType": "apk"
       },
+      "ios": {
+        "buildConfiguration": "Release"
+      },
       "channel": "preview"
     },
 

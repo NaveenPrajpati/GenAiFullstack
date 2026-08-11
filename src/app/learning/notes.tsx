@@ -81,10 +81,10 @@ export default function NotesScreen() {
         )}
 
         {!notesLoading && notes.length === 0 && (
-          <View className="items-center rounded-xl border border-dashed border-gray-300 bg-white p-10">
+          <View className="border-line bg-surface items-center rounded-xl border border-dashed p-10">
             <Text className="mb-2 text-4xl">📝</Text>
-            <Text className="mb-1 text-base font-semibold text-gray-900">Nothing saved yet</Text>
-            <Text className="text-center text-sm leading-relaxed text-gray-500">
+            <Text className="text-ink mb-1 text-base font-semibold">Nothing saved yet</Text>
+            <Text className="text-ink-faint text-center text-sm leading-relaxed">
               Open a topic on any roadmap to jot a note, keep a snippet, bookmark a link, or park a
               question.
             </Text>
@@ -93,7 +93,7 @@ export default function NotesScreen() {
 
         {open.length > 0 && (
           <View className="mb-4">
-            <Text className="mb-2 text-xs font-bold tracking-widest text-gray-400 uppercase">
+            <Text className="text-ink-faint mb-2 text-xs font-bold tracking-widest uppercase">
               Open questions
             </Text>
             {open.map((n) => (
@@ -115,7 +115,7 @@ export default function NotesScreen() {
         {rest.length > 0 && (
           <View>
             {open.length > 0 && (
-              <Text className="mb-2 text-xs font-bold tracking-widest text-gray-400 uppercase">
+              <Text className="text-ink-faint mb-2 text-xs font-bold tracking-widest uppercase">
                 Everything else
               </Text>
             )}

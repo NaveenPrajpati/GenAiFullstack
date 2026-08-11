@@ -52,6 +52,13 @@ export type TopicNode = {
   mastery_score?: number;
   completed_at?: string;
   next_review_at?: string;
+  /** A failed checkpoint owes one round of revision before the next attempt.
+   *  While `checkpoint_attempts` exceeds `revisions_done` the server refuses to
+   *  issue one — see `revisionOwed`. */
+  checkpoint_attempts?: number;
+  revisions_done?: number;
+  /** The questions the last failed attempt got wrong. */
+  weak_points?: string[];
   /** Set once the topic has been explained well in the learner's own words.
    *  Spent at the next checkpoint for an extra rung of the review ladder. */
   feynman_passed?: boolean;
@@ -120,9 +127,13 @@ export type Digest = {
   /** 1-based position in the drip-feed for this topic. Null on a revision
    *  digest — revising doesn't advance the drip-feed. */
   sequence?: number | null;
-  /** `revision` is written after a failed checkpoint, against the questions that
-   *  were missed. Absent on the ordinary teaching digests. */
-  kind?: 'revision';
+  /** `revision` follows a failed checkpoint; `reteach` follows two failed recall
+   *  checks on the same tips, and re-explains that material a different way.
+   *  Absent on the ordinary teaching digests. */
+  kind?: 'revision' | 'reteach';
+  /** Which explanation style a `reteach` was written in, when the learner has
+   *  one on file. */
+  style?: string | null;
   /** The questions missed on the failed attempt this revision digest answers. */
   weak_points?: string[];
   /** Recall check over EARLIER digests. Must be passed to mark this one.
@@ -148,8 +159,26 @@ export type DigestMarkResult = {
   remaining: number;
   next: Digest | null;
   coverage_complete: boolean;
+  /** Where the topic stands after marking. `needs_review` with no `generated`
+   *  means the drip-feed ended, not that generation failed — the difference
+   *  between "take the checkpoint" and "nothing new to send". */
+  topic_status?: ProgressStatus | null;
+  /** The marked digest was the revision owed by a failed checkpoint, and the
+   *  retry is now unblocked. */
+  revision_cleared?: boolean;
   topicId: string;
   roadmapId: string;
+};
+
+/** Why a recall check was refused, and whether the agent is re-teaching. */
+export type DigestCheckFailure = {
+  message: string;
+  quiz_result: QuizResult;
+  pass_score: number;
+  /** Set once the same check has been failed enough times that the teaching is
+   *  treated as the problem. A new explanation is on its way. */
+  reteaching?: boolean;
+  attempts?: number;
 };
 
 export type LearningAvailability = {
@@ -365,7 +394,23 @@ export type Checkpoint = {
   /** True when this is a spaced-repetition review of an already-completed topic. */
   is_review: boolean;
   pass_score: number;
+  /** So a learner knows what a failure costs before answering, rather than
+   *  discovering the cap by hitting it. */
+  attempts_today?: number;
+  attempt_limit?: number;
   questions: QuizQuestion[];
+};
+
+/** A refused checkpoint attempt: too soon after the last, or out of tries. */
+export type CheckpointBlocked = {
+  message: string;
+  blocked_reason: 'cooldown' | 'daily_limit' | 'needs_revision';
+  retry_at?: string;
+  attempts_today?: number;
+  limit?: number;
+  /** On `needs_revision`: the questions the failed attempt got wrong, which the
+   *  revision digest is written against. */
+  weak_points?: string[];
 };
 
 export type CheckpointOutcome = {
@@ -381,6 +426,18 @@ export type CheckpointOutcome = {
   was_review: boolean;
   /** The topic that picked up the slot after this one was completed. */
   advanced_to?: { topicId: string; title: string } | null;
+  /** A failed first attempt owes one round of revision before the next one. The
+   *  server enforces it, so the client has to carry it onto the topic — see
+   *  `revisionOwed` — or it keeps offering a retry that will be refused. */
+  needs_revision?: boolean;
+  /** The questions this attempt got wrong, verbatim. What the revision digest is
+   *  written against, and what the UI can name instead of "go and revise". */
+  weak_points?: string[];
+  /** Rungs of the review ladder granted for having explained the topic in your
+   *  own words — the payout for the Feynman exercise, landing here. */
+  feynman_bonus?: number;
+  /** False when the answers were withheld because the attempt didn't pass. */
+  answers_revealed?: boolean;
 };
 
 /** A completed topic whose spaced-repetition review has come due. */
@@ -560,6 +617,17 @@ export type StreamEvent = {
  *  deliberately not counted as completed. */
 export function isCompleted(topic: TopicNode): boolean {
   return topic.progress_status === 'completed';
+}
+
+/**
+ * Whether a failed checkpoint still owes this topic a round of revision.
+ *
+ * Mirrors `revision_outstanding` on the server, which is what actually refuses
+ * the attempt. Duplicated deliberately: without it the UI offers a checkpoint it
+ * knows will be turned away, and the learner finds out by being told no.
+ */
+export function revisionOwed(topic: TopicNode): boolean {
+  return (topic.checkpoint_attempts ?? 0) > (topic.revisions_done ?? 0);
 }
 
 /** "45m" / "1.5h" / "2h". Null when the estimate is missing, so callers can

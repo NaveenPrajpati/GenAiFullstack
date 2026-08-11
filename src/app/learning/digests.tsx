@@ -8,7 +8,7 @@ import { useColors } from '@/components/ui/theme';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { useLearningStore } from '@/features/learning/store';
 import type { Digest, Roadmap, TopicNode } from '@/features/learning/types';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Linking, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -118,13 +118,21 @@ function groupByDay(digests: Digest[]) {
 function ArchiveCard({
   digest,
   showRoadmap,
+  startOpen = false,
   onMark,
+  onAnswer,
 }: {
   digest: Digest;
   showRoadmap: boolean;
+  /** Open on arrival. Set when the screen was deep-linked to one topic: that's
+   *  someone sent here to read something specific, not to scan the archive. */
+  startOpen?: boolean;
   onMark: () => void;
+  /** The archive lists digests; it doesn't sit checks. Sends the learner to the
+   *  screen that does. */
+  onAnswer: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen);
   const marked = digest.status === 'marked';
   const date = new Date(digest.createdAt).toLocaleDateString(undefined, {
     month: 'short',
@@ -187,6 +195,11 @@ function ArchiveCard({
 
         {marked ? (
           <Text className="text-success text-[13px] font-semibold">✓ Acknowledged</Text>
+        ) : (digest.quiz?.length ?? 0) > 0 ? (
+          // Acknowledging this one means passing its recall check, and the check
+          // isn't rendered here. "Got it" could only ever be refused, so it says
+          // what to do instead.
+          <Button label="Answer the check" size="sm" variant="secondary" onPress={onAnswer} />
         ) : (
           <Button label="Got it" size="sm" onPress={onMark} />
         )}
@@ -207,8 +220,15 @@ export default function DigestsScreen() {
     fetchRoadmaps,
   } = useLearningStore();
 
-  const [roadmapId, setRoadmapId] = useState<string | null>(null);
-  const [topicId, setTopicId] = useState<string | null>(null);
+  // Seeded from the route so other screens can send a learner to one topic's
+  // digests — "go read your revision tips" has to land on the tips, not on a
+  // list of everything with them somewhere in it.
+  const params = useLocalSearchParams<{ roadmapId?: string; topicId?: string }>();
+  const [roadmapId, setRoadmapId] = useState<string | null>(params.roadmapId ?? null);
+  const [topicId, setTopicId] = useState<string | null>(params.topicId ?? null);
+  // Marking can be refused — the recall check, a digest deleted with its
+  // roadmap. Swallowing that left "Got it" doing nothing with no explanation.
+  const [markError, setMarkError] = useState('');
   const colors = useColors();
   const wide = useWideNav();
 
@@ -278,9 +298,9 @@ export default function DigestsScreen() {
               />
             )}
 
-            {!!digestsError && (
+            {!!(digestsError || markError) && (
               <View className="border-danger bg-danger-soft mb-3 rounded-xl border p-3">
-                <Text className="text-danger text-[13px]">{digestsError}</Text>
+                <Text className="text-danger text-[13px]">{digestsError || markError}</Text>
               </View>
             )}
 
@@ -326,7 +346,14 @@ export default function DigestsScreen() {
                     key={digest._id}
                     digest={digest}
                     showRoadmap={!roadmapId}
-                    onMark={() => markDigest(digest._id).catch(() => {})}
+                    startOpen={!!topicId && digest.status !== 'marked'}
+                    onMark={() => {
+                      setMarkError('');
+                      markDigest(digest._id).catch((e) =>
+                        setMarkError(e?.message ?? 'Could not mark that digest.')
+                      );
+                    }}
+                    onAnswer={() => router.push('/learning')}
                   />
                 ))}
               </View>

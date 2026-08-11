@@ -1,4 +1,5 @@
 import ScreenHeader from '@/components/ui/ScreenHeader';
+import { useColors } from '@/components/ui/theme';
 import SectionNav, { useWideNav } from '@/components/ui/SectionNav';
 import { useLearningStore } from '@/features/learning/store';
 import type { Difficulty, Memory } from '@/features/learning/types';
@@ -50,6 +51,7 @@ export default function SettingsScreen() {
     saveTriggerSettings,
   } = useLearningStore();
 
+  const colors = useColors();
   const [form, setForm] = useState<FormState>({
     skill_level: '',
     preferred_resource_types: '',
@@ -186,11 +188,11 @@ export default function SettingsScreen() {
 
       <ScrollView className="flex-1 p-4" contentContainerStyle={{ paddingBottom: 32 }}>
         {/* Daily Digest Toggle */}
-        <View className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
+        <View className="border-line bg-surface mb-4 rounded-xl border p-4">
           <View className="flex-row items-center justify-between">
             <View className="flex-1 pr-4">
-              <Text className="text-sm font-semibold text-gray-900">Daily Digests</Text>
-              <Text className="mt-0.5 text-xs leading-relaxed text-gray-500">
+              <Text className="text-ink text-sm font-semibold">Daily Digests</Text>
+              <Text className="text-ink-faint mt-0.5 text-xs leading-relaxed">
                 Receive AI-curated summaries of your roadmap topics each day
               </Text>
             </View>
@@ -200,36 +202,36 @@ export default function SettingsScreen() {
               <Switch
                 value={digestEnabled}
                 onValueChange={handleToggleDigest}
-                trackColor={{ true: '#7c3aed', false: '#e5e7eb' }}
-                thumbColor="#ffffff"
+                trackColor={{ true: colors.primary, false: colors.line }}
+                thumbColor={colors.surface}
               />
             )}
           </View>
 
           {!digestLoading && (
-            <View className="mt-4 border-t border-gray-100 pt-4">
-              <Text className="mb-2 text-xs font-semibold text-gray-500">Delivery time</Text>
-              <View className="flex-row items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-3 py-2">
+            <View className="border-line mt-4 border-t pt-4">
+              <Text className="text-ink-faint mb-2 text-xs font-semibold">Delivery time</Text>
+              <View className="border-line bg-surface-alt flex-row items-center justify-between rounded-xl border px-3 py-2">
                 <TouchableOpacity
                   onPress={() => setHour((h) => (h + 23) % 24)}
-                  className="h-9 w-9 items-center justify-center rounded-lg bg-white"
+                  className="bg-surface h-9 w-9 items-center justify-center rounded-lg"
                   activeOpacity={0.7}>
-                  <Text className="text-lg font-semibold text-gray-700">−</Text>
+                  <Text className="text-ink-soft text-lg font-semibold">−</Text>
                 </TouchableOpacity>
-                <Text className="text-base font-semibold text-gray-900">{formatHour(hour)}</Text>
+                <Text className="text-ink text-base font-semibold">{formatHour(hour)}</Text>
                 <TouchableOpacity
                   onPress={() => setHour((h) => (h + 1) % 24)}
-                  className="h-9 w-9 items-center justify-center rounded-lg bg-white"
+                  className="bg-surface h-9 w-9 items-center justify-center rounded-lg"
                   activeOpacity={0.7}>
-                  <Text className="text-lg font-semibold text-gray-700">+</Text>
+                  <Text className="text-ink-soft text-lg font-semibold">+</Text>
                 </TouchableOpacity>
               </View>
 
-              <Text className="mt-4 mb-1 text-xs font-semibold text-gray-500">Timezone</Text>
+              <Text className="text-ink-faint mt-4 mb-1 text-xs font-semibold">Timezone</Text>
               <TextInput
-                className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800"
+                className="border-line bg-surface-alt text-ink rounded-xl border px-4 py-3 text-sm"
                 placeholder="e.g. Asia/Kolkata"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor={colors.inkFaint}
                 autoCapitalize="none"
                 autoCorrect={false}
                 value={tz}
@@ -237,8 +239,8 @@ export default function SettingsScreen() {
               />
 
               {!!scheduleError && (
-                <View className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3">
-                  <Text className="text-sm text-red-700">{scheduleError}</Text>
+                <View className="border-danger bg-danger-soft mt-3 rounded-lg border p-3">
+                  <Text className="text-danger text-sm">{scheduleError}</Text>
                 </View>
               )}
 
@@ -247,20 +249,20 @@ export default function SettingsScreen() {
                 disabled={digestSaving || !scheduleDirty || !tz.trim()}
                 className={`mt-3 items-center rounded-xl py-3 ${
                   digestSaving
-                    ? 'bg-gray-300'
+                    ? 'bg-surface-alt'
                     : scheduleSaved
-                      ? 'bg-green-500'
+                      ? 'bg-success'
                       : !scheduleDirty || !tz.trim()
-                        ? 'bg-gray-200'
-                        : 'bg-violet-600'
+                        ? 'bg-surface-alt'
+                        : 'bg-primary'
                 }`}
                 activeOpacity={0.8}>
                 {digestSaving ? (
-                  <ActivityIndicator size="small" color="white" />
+                  <ActivityIndicator size="small" color={colors.onPrimary} />
                 ) : (
                   <Text
                     className={`text-sm font-semibold ${
-                      !scheduleDirty || !tz.trim() ? 'text-gray-500' : 'text-white'
+                      !scheduleDirty || !tz.trim() ? 'text-ink-faint' : 'text-on-primary'
                     }`}>
                     {scheduleSaved ? 'Saved!' : 'Save schedule'}
                   </Text>
@@ -271,9 +273,9 @@ export default function SettingsScreen() {
         </View>
 
         {/* Learning Profile */}
-        <View className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
-          <Text className="mb-1 text-sm font-semibold text-gray-900">Learning Profile</Text>
-          <Text className="mb-4 text-xs leading-relaxed text-gray-500">
+        <View className="border-line bg-surface mb-4 rounded-xl border p-4">
+          <Text className="text-ink mb-1 text-sm font-semibold">Learning Profile</Text>
+          <Text className="text-ink-faint mb-4 text-xs leading-relaxed">
             Shapes how new roadmaps are built and paced. Existing roadmaps will offer to update
             themselves once you change something here.
           </Text>
@@ -285,25 +287,25 @@ export default function SettingsScreen() {
           ) : (
             <>
               <View className="mb-4">
-                <Text className="mb-1 text-xs font-semibold text-gray-500">Skill Level</Text>
+                <Text className="text-ink-faint mb-1 text-xs font-semibold">Skill Level</Text>
                 <TextInput
-                  className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800"
+                  className="border-line bg-surface-alt text-ink rounded-xl border px-4 py-3 text-sm"
                   placeholder="e.g. beginner, intermediate, advanced"
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor={colors.inkFaint}
                   value={form.skill_level}
                   onChangeText={setField('skill_level')}
                 />
               </View>
 
               <View className="mb-4">
-                <Text className="mb-0.5 text-xs font-semibold text-gray-500">Available Time</Text>
-                <Text className="mb-1 text-xs text-gray-400">
+                <Text className="text-ink-faint mb-0.5 text-xs font-semibold">Available Time</Text>
+                <Text className="text-ink-faint mb-1 text-xs">
                   Minutes you can study per day — used to pace your roadmap
                 </Text>
                 <TextInput
-                  className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800"
+                  className="border-line bg-surface-alt text-ink rounded-xl border px-4 py-3 text-sm"
                   placeholder="e.g. 60"
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor={colors.inkFaint}
                   keyboardType="number-pad"
                   value={form.minutes_per_day}
                   onChangeText={setField('minutes_per_day')}
@@ -311,42 +313,42 @@ export default function SettingsScreen() {
               </View>
 
               <View className="mb-4">
-                <Text className="mb-0.5 text-xs font-semibold text-gray-500">Goals</Text>
-                <Text className="mb-1 text-xs text-gray-400">Comma-separated</Text>
+                <Text className="text-ink-faint mb-0.5 text-xs font-semibold">Goals</Text>
+                <Text className="text-ink-faint mb-1 text-xs">Comma-separated</Text>
                 <TextInput
-                  className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800"
+                  className="border-line bg-surface-alt text-ink rounded-xl border px-4 py-3 text-sm"
                   placeholder="e.g. get a job, build projects, personal interest"
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor={colors.inkFaint}
                   value={form.goals}
                   onChangeText={setField('goals')}
                 />
               </View>
 
               <View className="mb-4">
-                <Text className="mb-0.5 text-xs font-semibold text-gray-500">
+                <Text className="text-ink-faint mb-0.5 text-xs font-semibold">
                   Preferred Resources
                 </Text>
-                <Text className="mb-1 text-xs text-gray-400">Comma-separated</Text>
+                <Text className="text-ink-faint mb-1 text-xs">Comma-separated</Text>
                 <TextInput
-                  className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800"
+                  className="border-line bg-surface-alt text-ink rounded-xl border px-4 py-3 text-sm"
                   placeholder="e.g. videos, articles, interactive exercises"
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor={colors.inkFaint}
                   value={form.preferred_resource_types}
                   onChangeText={setField('preferred_resource_types')}
                 />
               </View>
 
               <View className="mb-4">
-                <Text className="mb-0.5 text-xs font-semibold text-gray-500">
+                <Text className="text-ink-faint mb-0.5 text-xs font-semibold">
                   Topics I Already Know
                 </Text>
-                <Text className="mb-1 text-xs text-gray-400">
+                <Text className="text-ink-faint mb-1 text-xs">
                   Comma-separated — AI will skip these in plans
                 </Text>
                 <TextInput
-                  className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800"
+                  className="border-line bg-surface-alt text-ink rounded-xl border px-4 py-3 text-sm"
                   placeholder="e.g. Python basics, basic math, HTML"
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor={colors.inkFaint}
                   value={form.known_topics}
                   onChangeText={setField('known_topics')}
                 />
@@ -355,8 +357,8 @@ export default function SettingsScreen() {
           )}
 
           {!!error && (
-            <View className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3">
-              <Text className="text-sm text-red-700">{error}</Text>
+            <View className="border-danger bg-danger-soft mb-3 rounded-lg border p-3">
+              <Text className="text-danger text-sm">{error}</Text>
             </View>
           )}
 
@@ -364,16 +366,16 @@ export default function SettingsScreen() {
             onPress={handleSave}
             disabled={saving || memoryLoading}
             className={`items-center rounded-xl py-3 ${
-              saving ? 'bg-gray-300' : saved ? 'bg-green-500' : 'bg-violet-600'
+              saving ? 'bg-surface-alt' : saved ? 'bg-success' : 'bg-primary'
             }`}
             activeOpacity={0.8}>
             {saving ? (
               <View className="flex-row items-center gap-2">
-                <ActivityIndicator size="small" color="white" />
-                <Text className="text-sm font-semibold text-white">Saving…</Text>
+                <ActivityIndicator size="small" color={colors.onPrimary} />
+                <Text className="text-on-primary text-sm font-semibold">Saving…</Text>
               </View>
             ) : (
-              <Text className="text-sm font-semibold text-white">
+              <Text className="text-on-primary text-sm font-semibold">
                 {saved ? 'Saved!' : 'Save Profile'}
               </Text>
             )}
@@ -381,25 +383,25 @@ export default function SettingsScreen() {
         </View>
 
         {/* Danger zone */}
-        <View className="rounded-xl border border-red-100 bg-white p-4">
-          <Text className="mb-1 text-sm font-semibold text-red-700">Danger Zone</Text>
-          <Text className="mb-3 text-xs text-gray-500">
+        <View className="border-danger bg-surface rounded-xl border p-4">
+          <Text className="text-danger mb-1 text-sm font-semibold">Danger Zone</Text>
+          <Text className="text-ink-faint mb-3 text-xs">
             Permanently clear all stored preferences and learning history from the AI&apos;s memory.
           </Text>
           <TouchableOpacity
             onPress={handleClearMemory}
             disabled={clearing}
             className={`items-center rounded-xl border py-3 ${
-              clearing ? 'border-gray-200 bg-gray-100' : 'border-red-200 bg-red-50'
+              clearing ? 'border-line bg-surface-alt' : 'border-danger bg-danger-soft'
             }`}
             activeOpacity={0.8}>
             {clearing ? (
               <View className="flex-row items-center gap-2">
                 <ActivityIndicator size="small" />
-                <Text className="text-sm text-gray-500">Clearing…</Text>
+                <Text className="text-ink-faint text-sm">Clearing…</Text>
               </View>
             ) : (
-              <Text className="text-sm font-medium text-red-700">Clear All Memory</Text>
+              <Text className="text-danger text-sm font-medium">Clear All Memory</Text>
             )}
           </TouchableOpacity>
         </View>

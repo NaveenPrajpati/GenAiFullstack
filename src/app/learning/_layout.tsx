@@ -43,6 +43,7 @@ export default function LearningLayout() {
             <Stack.Screen name="quiz" />
             <Stack.Screen name="notes" options={{ title: 'My notes' }} />
             <Stack.Screen name="digests" options={{}} />
+            <Stack.Screen name="misconceptions" options={{ title: 'Insights' }} />
             <Stack.Screen name="settings" options={{}} />
           </Stack>
         </View>

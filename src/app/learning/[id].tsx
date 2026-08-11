@@ -11,12 +11,13 @@ import { FeynmanCard } from '@/features/learning/components/FeynmanCard';
 import { NoteComposer, NoteRow } from '@/features/learning/components/Notes';
 import { useLearningStore } from '@/features/learning/store';
 import type {
+  CheckpointBlocked,
   ExplanationResult,
   Roadmap,
   RoadmapInsights,
   TopicNode,
 } from '@/features/learning/types';
-import { formatMinutes, isCompleted } from '@/features/learning/types';
+import { formatMinutes, isCompleted, revisionOwed } from '@/features/learning/types';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, ScrollView, Text, TouchableOpacity, View } from 'react-native';
@@ -197,6 +198,65 @@ function TopicDot({
   );
 }
 
+/**
+ * Why a checkpoint wouldn't open. Three refusals reach here — revision owed,
+ * cooldown, and the daily cap — and each wants a different next move, so none of
+ * them is served by a bare error string.
+ */
+function CheckpointBlockedCard({
+  blocked,
+  busy,
+  onRevise,
+  onDismiss,
+}: {
+  blocked: CheckpointBlocked;
+  busy: boolean;
+  onRevise: () => void;
+  onDismiss: () => void;
+}) {
+  const revision = blocked.blocked_reason === 'needs_revision';
+  return (
+    <View className="border-warning bg-warning-soft mt-3 rounded-xl border p-4">
+      <Text className="text-warning text-[15px] font-bold">
+        {revision ? 'Revision first' : 'Not just yet'}
+      </Text>
+      <Text className="text-ink-soft mt-1 text-[15px] leading-relaxed">{blocked.message}</Text>
+
+      {/* The questions that failed it. Naming them turns "go revise" into
+          something the learner can actually act on. */}
+      {!!blocked.weak_points?.length && (
+        <View className="mt-2.5">
+          {blocked.weak_points.map((w, i) => (
+            <Text key={i} className="text-ink-soft mt-0.5 text-[13px] leading-relaxed">
+              • {w}
+            </Text>
+          ))}
+        </View>
+      )}
+
+      {typeof blocked.attempts_today === 'number' && typeof blocked.limit === 'number' && (
+        <Text className="text-ink-faint mt-2 text-[13px]">
+          {blocked.attempts_today} of {blocked.limit} attempts used today
+        </Text>
+      )}
+
+      <View className="mt-3 flex-row gap-2">
+        {revision && (
+          <Button
+            label="Get revision tips"
+            size="sm"
+            full
+            loading={busy}
+            loadingLabel="Writing them…"
+            onPress={onRevise}
+          />
+        )}
+        <Button label="OK" variant="secondary" size="sm" onPress={onDismiss} />
+      </View>
+    </View>
+  );
+}
+
 export default function RoadmapDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -210,6 +270,9 @@ export default function RoadmapDetail() {
     checkpointLoading,
     checkpointOutcome,
     checkpointError,
+    checkpointBlocked,
+    generateNextDigest,
+    generatingDigest,
     startCheckpoint,
     submitCheckpoint,
     closeCheckpoint,
@@ -368,7 +431,33 @@ export default function RoadmapDetail() {
       return;
     }
     focusTopic(topic);
+    // Owed revision is refused server-side, so asking would spend a round trip to
+    // be told no. Go straight to what actually unblocks them.
+    if (revisionOwed(topic)) {
+      await handleRevise(topic);
+      return;
+    }
     startCheckpoint(topic.id, roadmap._id);
+  };
+
+  /**
+   * Fetch the revision a failed checkpoint owes, and take them to read it.
+   *
+   * `/digests/generate` routes to a revision digest whenever one is owed, so
+   * this is the same call the home screen makes — no second endpoint to keep in
+   * step. If one is already waiting the server declines and they're sent to read
+   * that instead, which is the right destination either way.
+   */
+  const handleRevise = async (topic: TopicNode) => {
+    setProgressError('');
+    // Resolves to null when the server declines — most often because revision
+    // tips are already waiting, which is not a failure. Either way the
+    // destination is the same: the tips that exist for this topic.
+    await generateNextDigest(roadmap._id, topic.id);
+    router.push({
+      pathname: '/learning/digests',
+      params: { roadmapId: roadmap._id, topicId: topic.id },
+    });
   };
 
   /** Called once a checkpoint passes — this is where completion actually lands. */
@@ -465,6 +554,16 @@ export default function RoadmapDetail() {
               </View>
             )}
 
+            {/* A checkpoint that failed to open renders no card, so its error
+                has nowhere else to go. Refusals with a reason — revision owed,
+                cooldown, the daily cap — are not routed here: they belong on the
+                topic they're about, and land in the card below. */}
+            {!checkpoint && !!checkpointError && (
+              <View className="border-danger bg-danger-soft mb-3 rounded-xl border p-3">
+                <Text className="text-danger text-[13px]">{checkpointError}</Text>
+              </View>
+            )}
+
             {!!justFinished && (
               <View className="border-success bg-success-soft mb-3 rounded-xl border p-3">
                 <Text className="text-success text-[13px] font-semibold">{justFinished}</Text>
@@ -507,6 +606,10 @@ export default function RoadmapDetail() {
                       const started = topic.progress_status === 'in_progress';
                       // Fully taught, awaiting its checkpoint.
                       const ready = topic.progress_status === 'needs_review';
+                      // A failed attempt owes revision before the next one, and
+                      // the server enforces it — so the button says so rather
+                      // than offering an attempt that will be refused.
+                      const owed = revisionOwed(topic);
                       const duration = formatMinutes(topic.estimated_minutes);
                       const isCheckpointOpen = checkpoint?.topicId === topic.id;
                       const noteCount = insights[roadmap._id]?.note_counts?.[topic.id] ?? 0;
@@ -634,11 +737,13 @@ export default function RoadmapDetail() {
                                       label={
                                         done
                                           ? '✓ Completed — mark as not done'
-                                          : ready
-                                            ? 'Take the final checkpoint'
-                                            : started
-                                              ? 'Take checkpoint to complete'
-                                              : 'Start this topic'
+                                          : owed
+                                            ? '📘 Revise before retrying'
+                                            : ready
+                                              ? 'Take the final checkpoint'
+                                              : started
+                                                ? 'Take checkpoint to complete'
+                                                : 'Start this topic'
                                       }
                                       variant={done ? 'secondary' : 'primary'}
                                       loading={checkpointLoading && !done}
@@ -649,10 +754,20 @@ export default function RoadmapDetail() {
                                         Starting it turns on daily tips for this topic.
                                       </Text>
                                     )}
-                                    {ready && (
+                                    {ready && !owed && (
                                       <Text className="text-ink-faint mt-1.5 text-[11px]">
                                         The tips have covered this topic — pass the checkpoint to
                                         complete it.
+                                      </Text>
+                                    )}
+                                    {/* Said before they tap, not after. The server
+                                        refuses this attempt either way; the only
+                                        question is whether they find out by being
+                                        turned away. */}
+                                    {owed && (
+                                      <Text className="text-warning mt-1.5 text-[11px]">
+                                        That last attempt didn&apos;t pass — a short revision comes
+                                        first.
                                       </Text>
                                     )}
                                   </View>
@@ -661,10 +776,18 @@ export default function RoadmapDetail() {
                                 {done && !isCheckpointOpen && (
                                   <View className="mt-2">
                                     <Button
-                                      label="🔁 Review this topic"
+                                      label={
+                                        owed ? '📘 Revise before retrying' : '🔁 Review this topic'
+                                      }
                                       variant="secondary"
                                       size="sm"
-                                      onPress={() => startCheckpoint(topic.id, roadmap._id)}
+                                      // The action follows the label: a topic
+                                      // owed revision is refused a checkpoint.
+                                      onPress={() =>
+                                        owed
+                                          ? handleRevise(topic)
+                                          : startCheckpoint(topic.id, roadmap._id)
+                                      }
                                     />
                                   </View>
                                 )}
@@ -708,6 +831,22 @@ export default function RoadmapDetail() {
                                   )}
                                 </View>
 
+                                {/* A refused attempt opens no checkpoint, so the card
+                                    below never mounts and its `error` has nowhere to
+                                    go. Rendered here instead — tapping and seeing
+                                    nothing at all is the worst possible answer. */}
+                                {checkpointBlocked?.topicId === topic.id && (
+                                  <CheckpointBlockedCard
+                                    blocked={checkpointBlocked}
+                                    busy={generatingDigest}
+                                    onRevise={async () => {
+                                      closeCheckpoint();
+                                      await handleRevise(topic);
+                                    }}
+                                    onDismiss={closeCheckpoint}
+                                  />
+                                )}
+
                                 {isCheckpointOpen && checkpoint && (
                                   <CheckpointCard
                                     checkpoint={checkpoint}
@@ -718,7 +857,18 @@ export default function RoadmapDetail() {
                                       const result = await submitCheckpoint(answers);
                                       if (result?.passed && !result.was_review) advanceFrom(topic);
                                     }}
-                                    onRetry={() => startCheckpoint(topic.id, roadmap._id, true)}
+                                    // A failed attempt owes revision, and the
+                                    // server refuses the retry until it's read.
+                                    // Sending them there is the difference
+                                    // between a retry and a round trip to "no".
+                                    onRetry={async () => {
+                                      if (!revisionOwed(topic)) {
+                                        startCheckpoint(topic.id, roadmap._id, true);
+                                        return;
+                                      }
+                                      closeCheckpoint();
+                                      await handleRevise(topic);
+                                    }}
                                     onClose={closeCheckpoint}
                                   />
                                 )}

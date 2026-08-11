@@ -138,12 +138,6 @@ export async function getFocus() {
   return res.data;
 }
 
-/** GET /current-state — the active roadmap and its progress, no id needed. */
-export async function getCurrentState() {
-  const res = await http.get(`/learning/current-state`);
-  return res.data;
-}
-
 /**
  * POST /progress — set a topic's progress.
  *

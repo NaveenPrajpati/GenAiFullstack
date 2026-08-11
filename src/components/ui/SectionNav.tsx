@@ -4,12 +4,16 @@ import { ScrollView, Text, TouchableOpacity, useWindowDimensions, View } from 'r
 
 export type NavItem = { label: string; href: string };
 
-/** The learning section's five destinations, in the order the design lists them. */
+/** The learning section's destinations, in the order the design lists them.
+ *  Insights sits after Notes: it's something to read about yourself, not a place
+ *  work gets done, so it belongs with the reference material rather than up with
+ *  Today and Roadmaps. */
 export const LEARNING_NAV: NavItem[] = [
   { label: 'Today', href: '/learning' },
   { label: 'Roadmaps', href: '/learning/roadmaps' },
   { label: 'Digests', href: '/learning/digests' },
   { label: 'Notes', href: '/learning/notes' },
+  { label: 'Insights', href: '/learning/misconceptions' },
   { label: 'Settings', href: '/learning/settings' },
 ];
 

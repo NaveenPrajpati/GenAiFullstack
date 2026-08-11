@@ -14,8 +14,10 @@ import type {
   ChatMessage,
   ChatResultData,
   Checkpoint,
+  CheckpointBlocked,
   CheckpointOutcome,
   Digest,
+  DigestCheckFailure,
   DigestMarkResult,
   DigestStatus,
   DueReview,
@@ -24,6 +26,7 @@ import type {
   ExplanationResult,
   LearningStats,
   Memory,
+  MisconceptionReport,
   NoteKind,
   OnboardingPrompt,
   ProgressStatus,
@@ -35,6 +38,20 @@ import type {
   SelectedTopic,
   Trigger,
 } from './types';
+
+/** "Try again in 12 min" / "…tomorrow at 09:00" — a refusal has to say when. */
+function retryHint(at?: string): string {
+  if (!at) return '';
+  const mins = Math.round((new Date(at).getTime() - Date.now()) / 60_000);
+  if (mins <= 0) return '';
+  if (mins < 60) return `Try again in ${mins} min.`;
+  const when = new Date(at).toLocaleString(undefined, {
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return `Try again ${when}.`;
+}
 
 const genId = () =>
   'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -174,6 +191,12 @@ type LearningState = {
   reviews: DueReview[];
   fetchReviews: () => Promise<void>;
 
+  /** What the learner keeps getting wrong, inferred from their attempt history.
+   *  Read-only — the analysis runs server-side after each graded attempt. */
+  misconceptions: MisconceptionReport[];
+  misconceptionsLoading: boolean;
+  fetchMisconceptions: (roadmapId?: string) => Promise<void>;
+
   /** Profile-derived extras per roadmap, keyed by id. Separate from `roadmaps`
    *  because it's derived server-side and refreshes on different triggers. */
   insights: Record<string, RoadmapInsights>;
@@ -199,6 +222,12 @@ type LearningState = {
   checkpointLoading: boolean;
   checkpointOutcome: CheckpointOutcome | null;
   checkpointError: string;
+  /** A refused attempt — the revision gate, the cooldown, the daily cap. Kept
+   *  apart from `checkpointError` and tagged with the topic it belongs to,
+   *  because a refusal means no checkpoint opens, and the card that would have
+   *  shown the error never mounts. Without this the learner taps and nothing
+   *  happens at all. */
+  checkpointBlocked: (CheckpointBlocked & { topicId: string }) | null;
   startCheckpoint: (topicId: string, roadmapId: string, regenerate?: boolean) => Promise<void>;
   submitCheckpoint: (
     answers: { question: number; answer: number }[]
@@ -267,7 +296,7 @@ type LearningState = {
   ) => Promise<ExplanationResult>;
   /** Grading of the last failed recall check, keyed by digest id, so the card
    *  can show what was wrong without the store owning per-card state. */
-  digestQuizFailures: Record<string, QuizResult>;
+  digestQuizFailures: Record<string, DigestCheckFailure>;
   generatingDigest: boolean;
   digestError: string;
   generateNextDigest: (roadmapId?: string, topicId?: string) => Promise<Digest | null>;
@@ -323,18 +352,25 @@ export const useLearningStore = create<LearningState>((set, get) => ({
         r._id === roadmapId
           ? {
               ...r,
-              topics: r.topics.map((t) =>
-                t.id === topicId ? { ...t, progress_status: status } : t
-              ),
+              topics: r.topics.map((t) => {
+                if (t.id === topicId) return { ...t, progress_status: status };
+                // Starting a topic is a swap, not a set — the server hands the
+                // slot over in one write (`start_topic`), so mirroring only the
+                // tapped topic left the roadmap showing two things underway
+                // until something happened to refetch it.
+                if (status === 'in_progress' && t.progress_status === 'in_progress') {
+                  return { ...t, progress_status: 'not_started' as const };
+                }
+                return t;
+              }),
             }
           : r
       ),
     }));
   },
   submitProgress: async (roadmapId, topicId, status) => {
-    const previous = get()
-      .roadmaps.find((r) => r._id === roadmapId)
-      ?.topics.find((t) => t.id === topicId)?.progress_status;
+    // The whole list, because starting a topic moves two of them.
+    const previous = get().roadmaps.find((r) => r._id === roadmapId)?.topics;
     get().optimisticUpdateTopic(roadmapId, topicId, status);
     try {
       await api.submitProgress({ roadmapId, topicId, status });
@@ -346,7 +382,11 @@ export const useLearningStore = create<LearningState>((set, get) => ({
       // should feel instant.
       get().fetchStats();
     } catch {
-      get().optimisticUpdateTopic(roadmapId, topicId, previous ?? 'not_started');
+      if (previous) {
+        set((s) => ({
+          roadmaps: s.roadmaps.map((r) => (r._id === roadmapId ? { ...r, topics: previous } : r)),
+        }));
+      }
       throw new Error('Failed to update progress');
     }
   },
@@ -406,6 +446,22 @@ export const useLearningStore = create<LearningState>((set, get) => ({
     } catch {
       // The summary strip is decorative — a failure here must not take the
       // roadmap list down with it.
+    }
+  },
+
+  misconceptions: [],
+  misconceptionsLoading: false,
+  fetchMisconceptions: async (roadmapId) => {
+    set({ misconceptionsLoading: true });
+    try {
+      const data = await api.getMisconceptions(roadmapId);
+      set({ misconceptions: data.result ?? [] });
+    } catch {
+      // An insight screen that can't load is a blank screen, not a broken app —
+      // the empty state already reads as "nothing to show yet".
+      set({ misconceptions: [] });
+    } finally {
+      set({ misconceptionsLoading: false });
     }
   },
 
@@ -492,14 +548,46 @@ export const useLearningStore = create<LearningState>((set, get) => ({
   checkpointLoading: false,
   checkpointOutcome: null,
   checkpointError: '',
+  checkpointBlocked: null,
   startCheckpoint: async (topicId, roadmapId, regenerate = false) => {
-    set({ checkpointLoading: true, checkpointError: '', checkpointOutcome: null });
+    set({
+      checkpointLoading: true,
+      checkpointError: '',
+      checkpointBlocked: null,
+      checkpointOutcome: null,
+    });
     try {
       const data = await api.startCheckpoint(topicId, roadmapId, regenerate);
       set({ checkpoint: { ...data.result, roadmapId } });
     } catch (e: any) {
+      // A refusal here carries an OBJECT detail — 429 for the cooldown or the
+      // daily cap, 409 while revision is owed. Assigning it straight to a string
+      // field put an object where a <Text> child was expected.
+      const detail = e?.response?.data?.detail;
+      const blocked: CheckpointBlocked | null =
+        detail && typeof detail === 'object' ? detail : null;
       set({
-        checkpointError: e?.response?.data?.detail ?? 'Could not load the checkpoint. Try again.',
+        // Tagged with the topic and kept apart from `checkpointError`: a refusal
+        // opens no checkpoint, so the card that would have shown the error never
+        // mounts. Computing this and then not storing it is what made tapping
+        // "take the checkpoint" do nothing visible at all.
+        checkpointBlocked: blocked
+          ? {
+              ...blocked,
+              topicId,
+              // The refusal has to say when. Folded into the message so the card
+              // renders one sentence rather than reaching for a formatter.
+              message: [blocked.message, retryHint(blocked.retry_at)].filter(Boolean).join(' '),
+            }
+          : null,
+        // The set on screen belongs to the attempt that was just refused. Left
+        // mounted, its Submit button still posts the old quizId — answering a
+        // refusal by grading the very set the refusal was protecting.
+        checkpoint: null,
+        checkpointError: blocked
+          ? ''
+          : ((typeof detail === 'string' ? detail : null) ??
+            'Could not load the checkpoint. Try again.'),
       });
     } finally {
       set({ checkpointLoading: false });
@@ -522,6 +610,31 @@ export const useLearningStore = create<LearningState>((set, get) => ({
         checkpoint.topicId,
         outcome.progress_status
       );
+
+      // A failure opened a revision debt server-side. Carried onto the local
+      // topic or `revisionOwed` keeps reading false: the card goes on offering a
+      // retry, the server goes on refusing it, and the learner is told to revise
+      // by nothing at all.
+      if (outcome.needs_revision) {
+        set((s) => ({
+          roadmaps: s.roadmaps.map((r) =>
+            r._id === checkpoint.roadmapId
+              ? {
+                  ...r,
+                  topics: r.topics.map((t) =>
+                    t.id === checkpoint.topicId
+                      ? {
+                          ...t,
+                          checkpoint_attempts: (t.checkpoint_attempts ?? 0) + 1,
+                          weak_points: outcome.weak_points ?? t.weak_points,
+                        }
+                      : t
+                  ),
+                }
+              : r
+          ),
+        }));
+      }
       get().fetchStats();
       get().fetchReviews();
       // The forecast counts remaining minutes, so finishing a topic moves the
@@ -532,15 +645,31 @@ export const useLearningStore = create<LearningState>((set, get) => ({
       if (outcome.advanced_to) get().fetchRoadmaps();
       return outcome;
     } catch (e: any) {
+      // 409 refuses a set that has already been graded, and its detail is an
+      // object. Assigning one of those straight to a string field is how an
+      // object ends up as a <Text> child.
+      const detail = e?.response?.data?.detail;
       set({
-        checkpointError: e?.response?.data?.detail ?? 'Could not grade that. Try again.',
+        checkpointError:
+          (typeof detail === 'string' ? detail : detail?.message) ??
+          'Could not grade that. Try again.',
+        // A graded set is spent. Leaving it on screen invites the learner to
+        // change an answer and press Submit again, which is the loop the server
+        // just closed.
+        ...(detail?.blocked_reason === 'already_graded' ? { checkpoint: null } : {}),
       });
       return null;
     } finally {
       set({ checkpointLoading: false });
     }
   },
-  closeCheckpoint: () => set({ checkpoint: null, checkpointOutcome: null, checkpointError: '' }),
+  closeCheckpoint: () =>
+    set({
+      checkpoint: null,
+      checkpointOutcome: null,
+      checkpointError: '',
+      checkpointBlocked: null,
+    }),
 
   explainTopic: async (topicId, body) => {
     try {
@@ -828,13 +957,19 @@ export const useLearningStore = create<LearningState>((set, get) => ({
       syncDigestWidget(get().unreadDigests);
       return result;
     } catch (e: any) {
-      // 422 means the recall check was wrong, and the body carries the grading.
-      const failed = e?.response?.data?.detail?.quiz_result;
-      if (failed) {
-        set((s) => ({ digestQuizFailures: { ...s.digestQuizFailures, [digestId]: failed } }));
-        throw new Error(e?.response?.data?.detail?.message ?? 'Not quite — try again.');
+      // 422 means the recall check was wrong, and the body carries the grading —
+      // plus, once they've failed the same check enough times, the news that the
+      // agent is re-explaining the material rather than asking them to re-read it.
+      const detail = e?.response?.data?.detail;
+      if (detail?.quiz_result) {
+        set((s) => ({
+          digestQuizFailures: { ...s.digestQuizFailures, [digestId]: detail },
+        }));
+        throw new Error(detail.message ?? 'Not quite — try again.');
       }
-      throw new Error(e?.response?.data?.detail ?? 'Could not mark that digest.');
+      throw new Error(
+        (typeof detail === 'string' ? detail : detail?.message) ?? 'Could not mark that digest.'
+      );
     }
   },
 
@@ -852,8 +987,14 @@ export const useLearningStore = create<LearningState>((set, get) => ({
       syncDigestWidget(get().unreadDigests);
       return digest;
     } catch (e: any) {
+      // A refusal here carries an OBJECT detail — "revision tips are already
+      // waiting", or the coverage/cap declines. Assigning it straight to a string
+      // field sent an object to a <Text> child.
+      const detail = e?.response?.data?.detail;
       set({
-        digestError: e?.response?.data?.detail ?? 'Could not fetch a new digest.',
+        digestError:
+          (typeof detail === 'string' ? detail : detail?.message) ??
+          'Could not fetch a new digest.',
       });
       return null;
     } finally {

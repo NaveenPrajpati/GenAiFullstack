@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
 
+import { useColors } from '@/components/ui/theme';
 import type { Checkpoint, CheckpointOutcome } from '../types';
 
 export function CheckpointCard({
@@ -29,6 +30,7 @@ export function CheckpointCard({
   onClose: () => void;
 }) {
   const [selected, setSelected] = useState<(number | null)[]>([]);
+  const colors = useColors();
 
   useEffect(() => {
     setSelected(new Array(checkpoint.questions.length).fill(null));
@@ -40,24 +42,37 @@ export function CheckpointCard({
   if (outcome) return <CheckpointResult outcome={outcome} onRetry={onRetry} onClose={onClose} />;
 
   return (
-    <View className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+    <View className="border-warning bg-warning-soft mt-3 rounded-xl border p-4">
       <View className="mb-1 flex-row items-center justify-between">
-        <Text className="text-xs font-semibold text-amber-700">
+        <Text className="text-warning text-xs font-semibold">
           {checkpoint.is_review ? '🔁 Review checkpoint' : '✍️ Checkpoint'}
         </Text>
-        <Text className="text-xs text-amber-600">
+        <Text className="text-warning text-xs">
           {answered}/{checkpoint.questions.length}
         </Text>
       </View>
-      <Text className="mb-3 text-xs text-gray-600">
+      <Text className="text-ink-soft mb-3 text-xs">
         {checkpoint.is_review
           ? 'You finished this a while back — see if it stuck.'
           : `Score ${checkpoint.pass_score}% or more to complete this topic.`}
       </Text>
 
+      {/* What a failure costs, before they answer. Attempts are capped per day,
+          and finding that out by hitting the wall mid-session is the worst time
+          to learn it. Only shown once one has been used — "3 tries left" on a
+          first attempt reads as a warning where none is needed. */}
+      {typeof checkpoint.attempts_today === 'number' &&
+        typeof checkpoint.attempt_limit === 'number' &&
+        checkpoint.attempts_today > 0 && (
+          <Text className="text-ink-faint mb-2 text-[13px]">
+            {Math.max(checkpoint.attempt_limit - checkpoint.attempts_today, 0)} of{' '}
+            {checkpoint.attempt_limit} attempts left today
+          </Text>
+        )}
+
       {checkpoint.questions.map((q, qIdx) => (
-        <View key={qIdx} className="mb-3 rounded-lg bg-white p-3">
-          <Text className="mb-2 text-sm font-medium text-gray-900">
+        <View key={qIdx} className="bg-surface mb-3 rounded-lg p-3">
+          <Text className="text-ink mb-2 text-sm font-medium">
             {qIdx + 1}. {q.question}
           </Text>
           {q.options.map((opt, optIdx) => {
@@ -74,17 +89,17 @@ export function CheckpointCard({
                   })
                 }
                 className={`mb-1.5 flex-row items-center gap-2 rounded-lg border px-3 py-2 ${
-                  isSel ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-gray-50'
+                  isSel ? 'border-warning bg-warning-soft' : 'border-line bg-surface-alt'
                 }`}
                 activeOpacity={0.7}>
                 <View
                   className={`h-3.5 w-3.5 rounded-full border-2 ${
-                    isSel ? 'border-amber-500 bg-amber-500' : 'border-gray-300'
+                    isSel ? 'border-warning bg-warning' : 'border-line'
                   }`}
                 />
                 <Text
                   className={`flex-1 text-xs ${
-                    isSel ? 'font-medium text-amber-900' : 'text-gray-700'
+                    isSel ? 'text-warning font-medium' : 'text-ink-soft'
                   }`}>
                   {opt}
                 </Text>
@@ -94,7 +109,7 @@ export function CheckpointCard({
         </View>
       ))}
 
-      {!!error && <Text className="mb-2 text-xs text-red-600">{error}</Text>}
+      {!!error && <Text className="text-danger mb-2 text-xs">{error}</Text>}
 
       <View className="flex-row gap-2">
         <TouchableOpacity
@@ -107,13 +122,13 @@ export function CheckpointCard({
           }
           disabled={!allAnswered || loading}
           className={`flex-1 items-center rounded-lg py-2.5 ${
-            allAnswered && !loading ? 'bg-amber-500' : 'bg-gray-300'
+            allAnswered && !loading ? 'bg-warning' : 'bg-surface-alt'
           }`}
           activeOpacity={0.8}>
           {loading ? (
-            <ActivityIndicator size="small" color="white" />
+            <ActivityIndicator size="small" color={colors.onPrimary} />
           ) : (
-            <Text className="text-sm font-semibold text-white">
+            <Text className="text-on-primary text-sm font-semibold">
               {allAnswered ? 'Submit' : `Answer all ${checkpoint.questions.length}`}
             </Text>
           )}
@@ -121,9 +136,9 @@ export function CheckpointCard({
         <TouchableOpacity
           onPress={onClose}
           disabled={loading}
-          className="items-center rounded-lg bg-gray-200 px-4 py-2.5"
+          className="bg-surface-alt items-center rounded-lg px-4 py-2.5"
           activeOpacity={0.8}>
-          <Text className="text-sm font-medium text-gray-700">Later</Text>
+          <Text className="text-ink-soft text-sm font-medium">Later</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -150,23 +165,23 @@ function CheckpointResult({
   return (
     <View
       className={`mt-3 rounded-xl border p-4 ${
-        passed ? 'border-green-200 bg-green-50' : 'border-orange-200 bg-orange-50'
+        passed ? 'border-success bg-success-soft' : 'border-warning bg-warning-soft'
       }`}>
-      <Text className={`mb-1 text-sm font-bold ${passed ? 'text-green-800' : 'text-orange-800'}`}>
+      <Text className={`mb-1 text-sm font-bold ${passed ? 'text-success' : 'text-warning'}`}>
         {passed
           ? outcome.was_review
             ? '✓ Still got it'
             : '✓ Topic complete'
           : `Not quite — ${outcome.score}%`}
       </Text>
-      <Text className="mb-3 text-xs text-gray-600">
+      <Text className="text-ink-soft mb-3 text-xs">
         {outcome.correct}/{outcome.total} correct · {outcome.pass_score}% to pass
         {nextReview ? ` · next review ${nextReview}` : ''}
       </Text>
 
       {/* Completing a topic hands the slot — and its daily tips — to the next one. */}
       {!!outcome.advanced_to && (
-        <Text className="mb-3 text-xs font-medium text-green-800">
+        <Text className="text-success mb-3 text-xs font-medium">
           ▶ Now on: {outcome.advanced_to.title}
         </Text>
       )}
@@ -174,7 +189,7 @@ function CheckpointResult({
       {/* A failed review keeps the topic completed — say so, or losing the tick
           would look like a bug. */}
       {!passed && outcome.was_review && (
-        <Text className="mb-3 text-xs text-gray-600">
+        <Text className="text-ink-soft mb-3 text-xs">
           This stays complete — we&apos;ll just bring it back sooner.
         </Text>
       )}
@@ -183,18 +198,18 @@ function CheckpointResult({
           server sends the outcome and a hint instead — enough to know what to go
           over, not enough to copy down and re-enter. */}
       {outcome.review.length > 0 && (
-        <View className="mb-3 rounded-lg bg-white p-3">
-          <Text className="mb-1 text-xs font-semibold text-gray-500">
+        <View className="bg-surface mb-3 rounded-lg p-3">
+          <Text className="text-ink-faint mb-1 text-xs font-semibold">
             {passed ? 'Worth another look' : 'Go over these before retrying'}
           </Text>
           {outcome.review.map((r, i) => (
             <View key={i} className="mb-1.5">
-              <Text className="text-xs text-gray-700">
+              <Text className="text-ink-soft text-xs">
                 • Q{r.question + 1}
                 {r.outcome ? ` — ${r.outcome}` : r.correctOption ? ` — ${r.correctOption}` : ''}
               </Text>
               {!!r.hint && (
-                <Text className="ml-3 text-[11px] leading-relaxed text-gray-500">{r.hint}</Text>
+                <Text className="text-ink-faint ml-3 text-[11px] leading-relaxed">{r.hint}</Text>
               )}
             </View>
           ))}
@@ -205,18 +220,18 @@ function CheckpointResult({
         {!passed && (
           <TouchableOpacity
             onPress={onRetry}
-            className="flex-1 items-center rounded-lg bg-orange-500 py-2.5"
+            className="bg-warning flex-1 items-center rounded-lg py-2.5"
             activeOpacity={0.8}>
-            <Text className="text-sm font-semibold text-white">Try again</Text>
+            <Text className="text-on-primary text-sm font-semibold">Try again</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity
           onPress={onClose}
           className={`flex-1 items-center rounded-lg py-2.5 ${
-            passed ? 'bg-green-600' : 'bg-gray-200'
+            passed ? 'bg-success' : 'bg-surface-alt'
           }`}
           activeOpacity={0.8}>
-          <Text className={`text-sm font-semibold ${passed ? 'text-white' : 'text-gray-700'}`}>
+          <Text className={`text-sm font-semibold ${passed ? 'text-on-primary' : 'text-ink-soft'}`}>
             {passed ? 'Continue' : 'Close'}
           </Text>
         </TouchableOpacity>

@@ -323,7 +323,13 @@ function Bubble({
 
   // Structured replies are cards, not bubbles, and they take the full column —
   // fixed pixel widths cut them off inside the narrower docked panel.
-  const card = (node: React.ReactNode) => <View className="mb-3 w-full items-start">{node}</View>;
+  //
+  // No `items-start` here: aligning to the start leaves the card content-sized,
+  // and a reply whose natural width beats the panel's (a comparison table, a
+  // long code line) then stretches the card out past the edge — taking the body
+  // text with it, since it wraps to the card. Stretching to the column instead
+  // gives the renderer a definite width to wrap and scroll against.
+  const card = (node: React.ReactNode) => <View className="mb-3 w-full">{node}</View>;
 
   if ('intent' in d) {
     if (d.intent === 'explain') return card(<ExplainCard text={d.topic_explaination} />);

@@ -12,9 +12,9 @@ import { useLearningStore } from '@/features/learning/store';
 import type {
   BlockedReason,
   Digest,
+  DigestCheckFailure,
   LearningStats,
   MasterySummary,
-  QuizResult,
   RoadmapFocus,
 } from '@/features/learning/types';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -253,7 +253,7 @@ function DigestCard({
   busy,
 }: {
   digest: Digest;
-  failure?: QuizResult;
+  failure?: DigestCheckFailure;
   onMark: (
     answers: { question: number; answer: number }[],
     written: Record<number, string>,
@@ -294,6 +294,24 @@ function DigestCard({
 
   return (
     <Card className="mb-3">
+      {/* A re-teach or a revision digest covers ground already sent. Saying so is
+          the point of having generated it — unlabelled, it reads as the tutor
+          repeating itself. */}
+      {digest.kind === 'reteach' && (
+        <View className="bg-primary-soft mb-2 self-start rounded-lg px-2.5 py-1">
+          <Text className="text-primary text-[11px] font-semibold">
+            ✍️ Explained a different way
+          </Text>
+        </View>
+      )}
+      {digest.kind === 'revision' && (
+        <View className="bg-warning-soft mb-2 self-start rounded-lg px-2.5 py-1">
+          <Text className="text-warning text-[11px] font-semibold">
+            🔁 Revision before your retry
+          </Text>
+        </View>
+      )}
+
       <View className="flex-row items-start justify-between gap-2">
         <View className="flex-1">
           <Text className="text-ink text-[17px] font-bold">{digest.topicTitle}</Text>
@@ -405,11 +423,28 @@ function DigestCard({
               })}
             </View>
           ))}
-          {!!failure && (
-            <Text className="text-danger text-[13px]">
-              {failure.correct}/{failure.total} right — look back over the tips and try again.
-            </Text>
-          )}
+          {/* Two failures on one check and the agent stops asking them to re-read
+              the same tips — it re-explains the material a different way. Saying
+              so is the difference between "you keep failing" and "that one's on
+              us", and the learner needs to know a new explanation is coming
+              rather than grinding the same questions. */}
+          {!!failure &&
+            (failure.reteaching ? (
+              <View className="bg-primary-soft mt-1 rounded-xl p-3">
+                <Text className="text-primary text-[13px] font-semibold">
+                  ✍️ That one&apos;s on us, not you
+                </Text>
+                <Text className="text-ink-soft mt-0.5 text-[13px] leading-relaxed">
+                  We&apos;re writing this up a different way — it&apos;ll appear in your digests
+                  shortly, and the check will follow the new explanation.
+                </Text>
+              </View>
+            ) : (
+              <Text className="text-danger text-[13px]">
+                {failure.quiz_result.correct}/{failure.quiz_result.total} right — look back over the
+                tips and try again.
+              </Text>
+            ))}
         </View>
       )}
 
@@ -526,7 +561,16 @@ export default function LearningHome() {
     try {
       const result = await markDigest(digest._id, { answers, written, generateNext });
       if (generateNext && !result.generated) {
-        setError("Nothing new to send yet — you're up to date on that topic.");
+        // No next digest has three different causes, and only one of them is
+        // "nothing to send". Reporting them all the same way told a learner who
+        // had just finished a topic to sit and wait.
+        setError(
+          result.revision_cleared
+            ? ''
+            : result.topic_status === 'needs_review'
+              ? "That's the last of the tips — the checkpoint completes this topic."
+              : "Nothing new to send yet — you're up to date on that topic."
+        );
       }
       fetchStats();
       fetchFocus();
