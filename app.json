@@ -59,9 +59,9 @@
               "label": "Today's digests",
               "description": "How many learning digests are waiting, and what's next up.",
               "minWidth": "320dp",
-              "minHeight": "120dp",
+              "minHeight": "180dp",
               "targetCellWidth": 5,
-              "targetCellHeight": 2,
+              "targetCellHeight": 4,
               "resizeMode": "horizontal|vertical",
               "updatePeriodMillis": 1800000
             }

@@ -13,15 +13,8 @@
  */
 import { FlexWidget, TextWidget } from 'react-native-android-widget';
 
-import {
-  badge,
-  badgeCaption,
-  headline,
-  subline,
-  tone,
-  WIDGET_DEEP_LINK,
-  type DigestWidgetData,
-} from './payload';
+import { WIDGET_DEEP_LINK } from './deepLink';
+import { badge, badgeCaption, headline, subline, tone, type DigestWidgetData } from './payload';
 
 type Theme = 'light' | 'dark';
 
@@ -55,6 +48,10 @@ export function UnreadDigestsAndroid({
   // Roughly a 2-cell-wide widget; narrower than this and only the count fits.
   const roomy = width >= 180;
 
+  // The teaching points only earn their space once there is width to set them
+  // against; on a one-cell widget the count is already all that fits.
+  const bullets = roomy ? data.bullets : [];
+
   return (
     <FlexWidget
       clickAction="OPEN_URI"
@@ -63,49 +60,78 @@ export function UnreadDigestsAndroid({
       style={{
         height: 'match_parent',
         width: 'match_parent',
-        flexDirection: 'row',
-        alignItems: 'center',
+        flexDirection: 'column',
         backgroundColor: colors.bg,
         borderRadius: 24,
         paddingHorizontal: 16,
         paddingVertical: 12,
       }}>
-      <FlexWidget style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-        <TextWidget
-          text={badge(data)}
-          style={{ fontSize: roomy ? 40 : 32, fontWeight: 'bold', color: tint }}
-        />
-        <TextWidget text={badgeCaption(data)} style={{ fontSize: 11, color: colors.faint }} />
-      </FlexWidget>
+      <FlexWidget style={{ width: 'match_parent', flexDirection: 'row', alignItems: 'center' }}>
+        <FlexWidget style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+          <TextWidget
+            text={badge(data)}
+            style={{ fontSize: roomy ? 40 : 32, fontWeight: 'bold', color: tint }}
+          />
+          <TextWidget text={badgeCaption(data)} style={{ fontSize: 11, color: colors.faint }} />
+        </FlexWidget>
 
-      {roomy && (
-        <FlexWidget
-          style={{
-            flexDirection: 'column',
-            alignItems: 'flex-start',
-            marginLeft: 14,
-            flex: 1,
-          }}>
-          <TextWidget
-            text={headline(data)}
-            maxLines={1}
-            truncate="END"
-            style={{ fontSize: 15, fontWeight: 'bold', color: colors.ink }}
-          />
-          <TextWidget
-            text={subline(data)}
-            maxLines={2}
-            truncate="END"
-            style={{ fontSize: 13, color: colors.faint, marginTop: 2 }}
-          />
-          {!!data.roadmap && (
+        {roomy && (
+          <FlexWidget
+            style={{
+              flexDirection: 'column',
+              alignItems: 'flex-start',
+              marginLeft: 14,
+              flex: 1,
+            }}>
             <TextWidget
-              text={data.roadmap}
+              text={headline(data)}
               maxLines={1}
               truncate="END"
-              style={{ fontSize: 11, color: colors.faint, marginTop: 2 }}
+              style={{ fontSize: 15, fontWeight: 'bold', color: colors.ink }}
             />
-          )}
+            <TextWidget
+              text={subline(data)}
+              maxLines={2}
+              truncate="END"
+              style={{ fontSize: 13, color: colors.faint, marginTop: 2 }}
+            />
+            {!!data.roadmap && (
+              <TextWidget
+                text={data.roadmap}
+                maxLines={1}
+                truncate="END"
+                style={{ fontSize: 11, color: colors.faint, marginTop: 2 }}
+              />
+            )}
+          </FlexWidget>
+        )}
+      </FlexWidget>
+
+      {/* Every point of the next digest, in order. Nothing is dropped here — a
+          widget resized shorter than its contents simply clips, and that is the
+          learner's own call about how much of it they want on the home screen.
+          Each point is held to two lines so a long one can't crowd out the rest. */}
+      {bullets.length > 0 && (
+        <FlexWidget style={{ width: 'match_parent', flexDirection: 'column', marginTop: 10 }}>
+          {bullets.map((point, i) => (
+            <FlexWidget
+              key={i}
+              style={{ width: 'match_parent', flexDirection: 'row', marginTop: i === 0 ? 0 : 6 }}>
+              {/* A separate glyph rather than a "• " prefix, so a wrapped point
+                  keeps its hanging indent instead of running back to the edge. */}
+              <TextWidget text="•" style={{ fontSize: 13, color: tint, width: 14 }} />
+              {/* `flex` is a FlexWidget style, not a text one, so the point needs
+                  a flexing wrapper to claim the rest of the row. */}
+              <FlexWidget style={{ flex: 1, flexDirection: 'column' }}>
+                <TextWidget
+                  text={point}
+                  maxLines={2}
+                  truncate="END"
+                  style={{ fontSize: 13, color: colors.ink, width: 'match_parent' }}
+                />
+              </FlexWidget>
+            </FlexWidget>
+          ))}
         </FlexWidget>
       )}
     </FlexWidget>

@@ -436,6 +436,11 @@ export type CheckpointOutcome = {
   /** Rungs of the review ladder granted for having explained the topic in your
    *  own words — the payout for the Feynman exercise, landing here. */
   feynman_bonus?: number;
+  /** Unread digests on this topic that were closed along with it. The tips were
+   *  a nudge to study something the learner has now proved they know, so they
+   *  leave the catch-up queue rather than sitting there nagging about finished
+   *  work. */
+  digests_closed?: number;
   /** False when the answers were withheld because the attempt didn't pass. */
   answers_revealed?: boolean;
 };

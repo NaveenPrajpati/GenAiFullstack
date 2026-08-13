@@ -15,6 +15,7 @@ import { HStack, Spacer, Text, VStack } from '@expo/ui/swift-ui';
 import { font, foregroundStyle, lineLimit, padding, widgetURL } from '@expo/ui/swift-ui/modifiers';
 import { createWidget, type WidgetEnvironment } from 'expo-widgets';
 
+import { WIDGET_DEEP_LINK } from './deepLink';
 import {
   badge,
   badgeCaption,
@@ -22,7 +23,6 @@ import {
   subline,
   tone,
   toWidgetData,
-  WIDGET_DEEP_LINK,
   type DigestWidgetData,
 } from './payload';
 import type { Digest } from '../types';

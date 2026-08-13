@@ -15,6 +15,10 @@ export const LEARNING_NAV: NavItem[] = [
   { label: 'Notes', href: '/learning/notes' },
   { label: 'Insights', href: '/learning/misconceptions' },
   { label: 'Settings', href: '/learning/settings' },
+  // Last, and deliberately so: it explains the rules — why a topic won't tick
+  // off, why a retry is held back — which is something you go looking for once
+  // you've met one of them, not the first thing anyone should be reading.
+  { label: 'Help', href: '/learning/help' },
 ];
 
 /**

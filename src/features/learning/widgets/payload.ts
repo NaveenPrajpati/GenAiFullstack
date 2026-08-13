@@ -23,6 +23,15 @@ export type DigestWidgetData = {
   topic: string | null;
   /** Which roadmap that digest belongs to. */
   roadmap: string | null;
+  /**
+   * The next digest's teaching points, in full and in order.
+   *
+   * The one field here that isn't a scalar, and the one worth the bytes: it is
+   * the only thing the widget can show that is the lesson rather than a count of
+   * lessons. Still primitives — an array of strings survives both the
+   * AsyncStorage round trip and the app-group crossing.
+   */
+  bullets: string[];
   /** True when the next digest is gated behind a recall check, which changes
    *  the call to action from "read" to "answer". */
   needsQuiz: boolean;
@@ -44,6 +53,7 @@ export const EMPTY_WIDGET_DATA: DigestWidgetData = {
   count: 0,
   topic: null,
   roadmap: null,
+  bullets: [],
   needsQuiz: false,
   roadmaps: 0,
   synced: false,
@@ -65,6 +75,11 @@ export function toWidgetData(digests: Digest[]): DigestWidgetData {
     count: digests.length,
     topic: next.topicTitle ?? null,
     roadmap: next.roadmapTitle ?? null,
+    // Every point, not a preview: the widget is where the reading happens now,
+    // so trimming here would decide for the layout what fits. `?? []` because
+    // this arrives from the server, where the field being required is a promise
+    // rather than a guarantee.
+    bullets: next.bullets ?? [],
     // `quiz` can be present but empty; an empty check is not a check.
     needsQuiz: !!next.quizId && (next.quiz?.length ?? 0) > 0,
     roadmaps: new Set(digests.map((d) => d.roadmapId)).size,
@@ -97,9 +112,6 @@ export async function loadWidgetData(): Promise<DigestWidgetData> {
     return EMPTY_WIDGET_DATA;
   }
 }
-
-/** Deep link into the catch-up screen. Matches `scheme` in app.json. */
-export const WIDGET_DEEP_LINK = 'aiapps:///learning';
 
 /** One label for both platforms, so the two widgets can't drift apart. */
 export function headline(data: DigestWidgetData): string {

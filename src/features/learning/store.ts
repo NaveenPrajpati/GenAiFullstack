@@ -635,6 +635,10 @@ export const useLearningStore = create<LearningState>((set, get) => ({
           ),
         }));
       }
+      // Completing a topic closes whatever it still had waiting. Pulled again
+      // rather than filtered locally: the server decides what closed, and the
+      // refetch re-syncs the home-screen widget with it.
+      if (outcome.digests_closed) get().fetchUnreadDigests();
       get().fetchStats();
       get().fetchReviews();
       // The forecast counts remaining minutes, so finishing a topic moves the

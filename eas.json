@@ -8,6 +8,9 @@
       "developmentClient": true,
       "distribution": "internal",
       "channel": "development",
+      "env": {
+        "APP_VARIANT": "development"
+      },
       "ios": { "simulator": false },
       "android": {
         "withoutCredentials": true
@@ -21,7 +24,10 @@
       "ios": {
         "buildConfiguration": "Release"
       },
-      "channel": "preview"
+      "channel": "preview",
+      "env": {
+        "APP_VARIANT": "preview"
+      }
     },
 
     "production": {
