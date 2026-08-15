@@ -11,11 +11,12 @@ import {
   RagEvaluation,
   RagSource,
 } from '@/features/rag/ragTypes';
+import { openAgentsApp, openLanding } from '@/navigation/apps';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import { DocumentPickerAsset } from 'expo-document-picker';
-import { useRouter } from 'expo-router';
 import {
+  ArrowRightIcon,
   BarChart3Icon,
   CheckCircle2Icon,
   ClockIcon,
@@ -23,6 +24,7 @@ import {
   FileTextIcon,
   HomeIcon,
   InfoIcon,
+  LayoutGridIcon,
   LinkIcon,
   LogOutIcon,
   MenuIcon,
@@ -50,8 +52,8 @@ import {
   View,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { BASE_URL, RagApis } from '../services/api';
-import { authedFetch, http } from '../services/http';
+import { BASE_URL, RagApis } from '@/services/api';
+import { authedFetch, http } from '@/services/http';
 
 const VIOLET = '#7c3aed';
 const VIEW_MODE_KEY = 'rag_view_mode'; // 'dev' | 'user' — Developer view is the default
@@ -76,7 +78,6 @@ export default function RagChatbotScreen() {
   const [allChats, setAllChats] = useState<any[]>([]);
   const [chatsLoading, setChatsLoading] = useState(true);
   const { user, logout } = useAuth();
-  const router = useRouter();
   const [showSidebar, setShowSidebar] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
   const [showFeatures, setShowFeatures] = useState(false);
@@ -514,13 +515,23 @@ export default function RagChatbotScreen() {
     <View
       className="border-gray-200 bg-white"
       style={isWide ? { width: 288, borderRightWidth: 1 } : { flex: 1 }}>
-      {/* Logo */}
-      <View className="flex-row items-center gap-2.5 border-b border-gray-100 px-5 py-4">
+      {/* Logo — also the way back to the launcher, mirroring the drawer header
+          in the agent suite. Both are relaunches, not navigations. */}
+      <TouchableOpacity
+        onPress={openLanding}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Back to all apps"
+        className="flex-row items-center gap-2.5 border-b border-gray-100 px-5 py-4">
         <View className="h-8 w-8 items-center justify-center rounded-xl bg-violet-600">
           <SparklesIcon size={16} color="#fff" />
         </View>
-        <Text className="text-base font-bold text-gray-900">RAG Assistant</Text>
-      </View>
+        <View className="flex-1">
+          <Text className="text-base font-bold text-gray-900">RAG Assistant</Text>
+          <Text className="text-[10px] text-gray-400">Tap for all apps</Text>
+        </View>
+        <HomeIcon size={14} color="#9ca3af" />
+      </TouchableOpacity>
 
       <View className="px-4 pt-4">
         <TouchableOpacity
@@ -566,6 +577,25 @@ export default function RagChatbotScreen() {
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* The way out of this app. RAG has its own navigator, so the agent
+            suite isn't a route away — leaving relaunches into it, with nothing
+            left behind to go back to. See `@/navigation/apps`. */}
+        <TouchableOpacity
+          onPress={() => openAgentsApp()}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Explore the other agents"
+          className="mt-4 flex-row items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5">
+          <View className="h-7 w-7 items-center justify-center rounded-lg bg-indigo-100">
+            <LayoutGridIcon size={14} color="#4f46e5" />
+          </View>
+          <View className="flex-1">
+            <Text className="text-xs font-semibold text-gray-700">Explore other agents</Text>
+            <Text className="text-[10px] text-gray-400">Assistant, learning, tasks & meals</Text>
+          </View>
+          <ArrowRightIcon size={14} color="#9ca3af" />
+        </TouchableOpacity>
 
         {/* Documents */}
         <Text className="mt-6 mb-2 text-[11px] font-semibold tracking-wide text-gray-400 uppercase">

@@ -13,6 +13,7 @@ import ResultCards from '@/features/assistant/components/ResultCards';
 import SkillTrail, { SKILL_META } from '@/features/assistant/components/SkillTrail';
 import { useAssistantStore } from '@/features/assistant/store';
 import type { ChatMessage, Skill } from '@/features/assistant/types';
+import { openRagApp } from '@/navigation/apps';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -139,13 +140,29 @@ export default function UnifiedAssistantScreen() {
         title="Assistant"
         subtitle="One chat · three skills"
         right={
-          <TouchableOpacity
-            onPress={newConversation}
-            className="rounded-lg bg-gray-100 px-3 py-1.5"
-            activeOpacity={0.7}
-            accessibilityRole="button">
-            <Text className="text-xs text-gray-600">New chat</Text>
-          </TouchableOpacity>
+          <>
+            {/* Leaves the agent suite entirely — RAG has its own navigator, and
+                this is the door to it. See `@/navigation/apps`. On a phone the
+                label is dropped rather than allowed to crowd the title out. */}
+            <TouchableOpacity
+              onPress={openRagApp}
+              className="flex-row items-center gap-1 rounded-lg bg-violet-50 px-3 py-1.5"
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Explore the RAG chatbot">
+              <Text className="text-xs">🤖</Text>
+              {!isMobile && (
+                <Text className="text-xs font-medium text-violet-700">Explore RAG</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={newConversation}
+              className="rounded-lg bg-gray-100 px-3 py-1.5"
+              activeOpacity={0.7}
+              accessibilityRole="button">
+              <Text className="text-xs text-gray-600">New chat</Text>
+            </TouchableOpacity>
+          </>
         }>
         <View className="mt-3 flex-row flex-wrap items-center gap-2">
           {(Object.keys(SKILL_META) as Skill[]).map((s) => {

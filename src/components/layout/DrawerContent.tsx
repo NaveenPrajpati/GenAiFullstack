@@ -1,7 +1,9 @@
 import { useAuth } from '@/context/AuthContext';
+import { openLanding } from '@/navigation/apps';
 import { DrawerContentComponentProps, DrawerContentScrollView } from 'expo-router/drawer';
 import { usePathname, useRouter } from 'expo-router';
 import * as Updates from 'expo-updates';
+import { ChevronLeftIcon } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Text, TouchableOpacity, View } from 'react-native';
 
@@ -16,14 +18,17 @@ interface NavItem {
 }
 
 /**
- * Two top-level products: the RAG chatbot (your documents) and the Assistant
- * (the supervisor over three agents). RAG is deliberately a peer, not a skill —
- * it has its own data and interaction model.
+ * This drawer belongs to the agent suite (`app/(agents)`) and lists only what
+ * that suite contains: the Assistant, and the three skills it routes to.
  *
- * Home isn't listed: tapping the "AI Toolkit" header goes there.
+ * The RAG chatbot is deliberately absent. It is a peer product, not a skill —
+ * its own data, its own interaction model, its own navigator — so it is reached
+ * from the Assistant's "Explore RAG" action or the home card, both of which
+ * relaunch into `app/(rag)` rather than open a drawer route.
+ *
+ * Home isn't listed either: tapping the "AI Toolkit" header goes there.
  */
 const NAV_ITEMS: NavItem[] = [
-  { href: '/rag-chatbot', emoji: '🤖', label: 'RAG Chatbot', desc: 'Chat with your documents' },
   {
     href: '/assistant',
     emoji: '✨',
@@ -136,10 +141,10 @@ export default function DrawerContent(props: DrawerContentComponentProps) {
     }
   }, [updateStatus]);
 
-  const isActive = (href: string) => {
-    if (href === '/') return pathname === '/' || pathname === '';
-    return pathname === href || pathname.startsWith(href + '/');
-  };
+  // Only routes inside this drawer get here now, so there is no `/` case to
+  // special-case: the landing screen lives outside the suite and can never be
+  // the active drawer route.
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
 
   const handleNavigate = (href: string) => {
     router.navigate(href);
@@ -156,22 +161,24 @@ export default function DrawerContent(props: DrawerContentComponentProps) {
 
   return (
     <View className="flex-1 bg-gray-800" style={{ paddingTop: Platform.OS !== 'web' ? 40 : 0 }}>
-      {/* Header — doubles as the Home link, so Home needs no nav row. */}
+      {/* Header — the way out of the suite and back to the launcher. That is a
+          relaunch, not a drawer route, so it doesn't go through
+          `handleNavigate` and never renders as "active". */}
       <TouchableOpacity
-        onPress={() => handleNavigate('/')}
-        className={`border-b border-gray-700 px-5 py-4 ${isActive('/') ? 'bg-gray-700/40' : ''}`}
+        onPress={openLanding}
+        className="border-b border-gray-700 px-5 py-4"
         activeOpacity={0.7}
         accessibilityRole="button"
-        accessibilityLabel="Go to home">
+        accessibilityLabel="Back to all apps">
         <View className="flex-row items-center gap-3">
           <View className="h-9 w-9 items-center justify-center rounded-lg bg-indigo-600">
             <Text className="text-sm font-bold text-white">AI</Text>
           </View>
           <View className="flex-1">
             <Text className="text-base font-semibold text-white">AI Toolkit</Text>
-            <Text className="text-xs text-gray-400">{isActive('/') ? 'Home' : 'Tap for home'}</Text>
+            <Text className="text-xs text-gray-400">Tap for all apps</Text>
           </View>
-          {isActive('/') && <View className="h-1.5 w-1.5 rounded-full bg-indigo-400" />}
+          <ChevronLeftIcon size={16} color="#9ca3af" />
         </View>
       </TouchableOpacity>
 

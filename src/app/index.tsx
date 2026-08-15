@@ -1,9 +1,17 @@
+/**
+ * The landing screen — a launcher, not a screen inside either app.
+ *
+ * It lives at `app/index`, outside both route groups, so it has no drawer over
+ * it and no app behind it. Every card here launches: `@/navigation/apps`
+ * replaces the root stack entry, so choosing a product commits to it, and the
+ * way back is that product's own "home" affordance rather than a back gesture.
+ */
 import { apiClient, useAuth } from '@/context/AuthContext';
+import { openAgentsApp, openRagApp } from '@/navigation/apps';
 import { UserApis } from '@/services/api';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
-import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import {
   Platform,
@@ -13,6 +21,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 /**
  * The supervisor sits above the three agents rather than beside them, so it gets
  * a featured card instead of a grid slot — the grid below is the specialist
@@ -33,11 +42,11 @@ const FEATURED = {
 
 /**
  * The RAG chatbot is its own product, not one of the Assistant's skills: it has
- * its own data (documents you upload) and its own interaction model. It gets a
- * peer card rather than a slot in the skills grid.
+ * its own data (documents you upload), its own interaction model, and since the
+ * navigator split, its own route group. It gets a peer card rather than a slot
+ * in the skills grid, and the button launches it instead of pushing it.
  */
 const RAG = {
-  href: '/rag-chatbot',
   emoji: '🤖',
   title: 'RAG Chatbot',
   tag: 'Chat with your documents',
@@ -94,8 +103,7 @@ Notifications.setNotificationHandler({
 const CONTENT_MAX_WIDTH = 1180;
 const CARD_GAP = 20;
 
-export default function HomeScreen() {
-  const router = useRouter();
+export default function LandingScreen() {
   const { token } = useAuth();
   const { width } = useWindowDimensions();
 
@@ -159,7 +167,9 @@ export default function HomeScreen() {
   const isGrid = columns > 1;
 
   return (
-    <View className="flex-1">
+    // No drawer above this screen any more, so nothing else is keeping the
+    // header clear of the status bar.
+    <SafeAreaView edges={['top']} className="flex-1 bg-white">
       <ScrollView className="flex-1 bg-gray-50">
         {/* Header */}
         <View className="items-center border-b border-gray-200 bg-white px-6 py-10">
@@ -206,7 +216,7 @@ export default function HomeScreen() {
                     {RAG.desc}
                   </Text>
                   <TouchableOpacity
-                    onPress={() => router.navigate(RAG.href)}
+                    onPress={openRagApp}
                     className={`${RAG.btnBg} self-start rounded-lg px-4 py-2.5`}
                     activeOpacity={0.8}
                     accessibilityRole="button">
@@ -264,7 +274,7 @@ export default function HomeScreen() {
               </View>
 
               <TouchableOpacity
-                onPress={() => router.navigate(FEATURED.href)}
+                onPress={() => openAgentsApp(FEATURED.href)}
                 className="mt-5 self-start rounded-lg bg-white px-5 py-2.5"
                 activeOpacity={0.85}
                 accessibilityRole="button">
@@ -315,7 +325,7 @@ export default function HomeScreen() {
                       {app.desc}
                     </Text>
                     <TouchableOpacity
-                      onPress={() => router.navigate(app.href)}
+                      onPress={() => openAgentsApp(app.href)}
                       className={`${app.btnBg} mt-4 flex-row items-center justify-center gap-1.5 self-start rounded-lg px-4 py-2.5`}
                       activeOpacity={0.8}>
                       <Text className="text-sm font-medium text-white">Launch →</Text>
@@ -346,7 +356,7 @@ export default function HomeScreen() {
                           {app.desc}
                         </Text>
                         <TouchableOpacity
-                          onPress={() => router.navigate(app.href)}
+                          onPress={() => openAgentsApp(app.href)}
                           className={`${app.btnBg} self-start rounded-lg px-4 py-2`}
                           activeOpacity={0.8}>
                           <Text className="text-sm font-medium text-white">Launch →</Text>
@@ -360,6 +370,6 @@ export default function HomeScreen() {
           </View>
         </View>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }

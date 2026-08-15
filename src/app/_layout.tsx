@@ -1,13 +1,10 @@
-import DrawerContent from '@/components/layout/DrawerContent';
 import { useColors, useTheme, useThemeSync } from '@/components/ui/theme';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { useLearningStore } from '@/features/learning/store';
-import { usePathname, useRouter, useSegments } from 'expo-router';
-import { Drawer, DrawerToggleButton } from 'expo-router/drawer';
+import { Stack, usePathname, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { useWindowDimensions } from 'react-native';
 import Toast from 'react-native-toast-message';
 import '../../global.css';
 
@@ -15,13 +12,29 @@ import '../../global.css';
 // is loaded by expo-router's `require.context` during render, which is after
 // the root view attaches and therefore too late to pin the splash.
 
-function AppDrawer() {
+/**
+ * The root holds no chrome of its own — just the session guard and four
+ * mutually exclusive worlds:
+ *
+ *  - `index`    — the landing screen, a launcher for the two apps below. It is
+ *                 deliberately not inside either one: it has no drawer over it
+ *                 and nothing behind it.
+ *  - `(agents)` — the drawer app: the supervisor and its three skills.
+ *  - `(rag)`    — the RAG chatbot, which is its own product with its own
+ *                 sidebar, and deliberately has no drawer behind it.
+ *  - `auth`     — the signed-out flow.
+ *
+ * Route groups keep the URLs unchanged (`/`, `/assistant`, `/rag-chatbot`), so
+ * this split is invisible to links and deep links. Switching worlds goes
+ * through `@/navigation/apps`, which replaces rather than pushes — see there
+ * for why crossing between them intentionally leaves nothing to go back to.
+ */
+function RootNavigator() {
   const { token, isReady } = useAuth();
   const segments = useSegments();
   const pathname = usePathname();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
-  const { width } = useWindowDimensions();
   const colors = useColors();
   const themeHydrated = useTheme((s) => s.hydrated);
   // Remembers the protected route a signed-out user was trying to reach (e.g. a
@@ -45,6 +58,8 @@ function AppDrawer() {
     useLearningStore.getState().fetchUnreadDigests();
   }, [isReady, token]);
 
+  // `auth` is the one top-level route outside a group, so this reads the same
+  // as it did before the split.
   const inAuth = segments[0] === 'auth';
   // Some auth routes are visited *while authenticated*: a logged-in guest upgrades
   // via convert-guest, and a freshly-signed-up user may verify their email. Both
@@ -96,42 +111,23 @@ function AppDrawer() {
     return () => clearTimeout(bail);
   }, [mounted, isReady, themeHydrated, routeSettled]);
 
-  const isMobile = width <= 800;
-  const showDrawer = !!token && !inAuth;
   return (
-    <Drawer
-      drawerContent={(props) => <DrawerContent {...props} />}
+    <Stack
       screenOptions={{
-        // headerTitle: 'All apps',
-        headerStyle: { backgroundColor: colors.bg, elevation: 0, shadowOpacity: 0 },
-        headerTintColor: colors.ink,
-        headerTitleStyle: { color: colors.ink },
-        headerShadowVisible: false,
-        sceneStyle: { backgroundColor: colors.bg },
-
-        headerLeft: () => <DrawerToggleButton tintColor={colors.inkSoft} />,
-        // drawerType: !showDrawer ? 'front' : isMobile ? 'front' : 'permanent',
-        drawerStyle: { width: 256, backgroundColor: '#111827' },
-        swipeEnabled: showDrawer && isMobile,
-        overlayColor: 'rgba(0,0,0,0.5)',
+        headerShown: false,
+        // Each child is a whole app. A push animation would frame the switch as
+        // a drill-down you can swipe out of; a cross-fade reads as a relaunch,
+        // which is what it is. The gesture is off for the same reason — with
+        // one entry on this stack there is nothing behind to reveal.
+        animation: 'fade',
+        gestureEnabled: false,
+        contentStyle: { backgroundColor: colors.bg },
       }}>
-      <Drawer.Screen name="index" options={{ title: 'Home' }} />
-      <Drawer.Screen name="assistant" options={{ drawerLabel: 'Assistant', headerShown: true }} />
-      <Drawer.Screen name="rag-chatbot" options={{ headerTitle: 'Rag Chatbot' }} />
-      <Drawer.Screen
-        name="meal-planner"
-        options={{ drawerLabel: 'Meal planner', headerShown: false }}
-      />
-      <Drawer.Screen name="learning" options={{ title: 'Learning', headerShown: false }} />
-      <Drawer.Screen
-        name="personal-assistant"
-        options={{ drawerLabel: 'Personal Assistant', headerShown: false }}
-      />
-      <Drawer.Screen
-        name="auth"
-        options={{ drawerItemStyle: { display: 'none' }, headerShown: false, swipeEnabled: false }}
-      />
-    </Drawer>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="(agents)" />
+      <Stack.Screen name="(rag)" />
+      <Stack.Screen name="auth" />
+    </Stack>
   );
 }
 
@@ -145,7 +141,7 @@ export default function MainLayout() {
   return (
     <AuthProvider>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-      <AppDrawer />
+      <RootNavigator />
       <Toast />
     </AuthProvider>
   );
