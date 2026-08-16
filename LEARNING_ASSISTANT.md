@@ -1,6 +1,6 @@
 # Learning Assistant
 
-Try it: **https://ai-agents--ai-apps.expo.app** → Learning
+Try it: **https://ai-agents--ai-apps.expo.app/learning**
 
 A tutor that doesn't just answer questions. You tell it what you want to learn, and
 it builds you a roadmap, teaches one topic at a time in small daily instalments,
@@ -146,9 +146,17 @@ comes back later rather than immediately.
 question to come back to. Unresolved questions lead the list, because coming back
 to them is the point of writing them down. They survive a roadmap being edited.
 
-**Progress you can trust.** The percentage counts topics you've *passed*. Alongside
-it is a mastery figure that weighs recent attempts more heavily than old ones and
-fades when a review goes overdue — so it tells you what you know now, not what you
+**Progress you can trust.** The percentage counts topics you've *passed*.
+
+Alongside it is a **mastery** figure, and it answers a different question: not how
+far through you are, but how well you're holding what you've been tested on. It is
+the average across the topics you've actually been graded on — which early on is a
+small handful — so the tile says how many it's speaking for. Two passed checkpoints
+can read 99% while nineteen topics are untouched, and that's the honest number:
+you're holding what you've done, and you've barely started.
+
+Within that, recent attempts weigh more heavily than old ones, and a topic fades
+once its review goes overdue. So it tells you what you know *now*, not what you
 knew in week one.
 
 **A finish date.** Tell the assistant how many minutes a day you can give it, and

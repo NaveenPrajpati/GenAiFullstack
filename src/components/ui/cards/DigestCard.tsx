@@ -229,7 +229,7 @@ function DigestCard({
 
       <View className="mt-4 flex-row gap-2.5">
         <Button
-          label="Mark"
+          label="Mark Readed "
           variant="secondary"
           onPress={() => onMark(answers, written, false)}
           disabled={!ready}
@@ -239,7 +239,7 @@ function DigestCard({
         {/* Generating costs a search and an LLM call, so it stays an explicit
             choice rather than something every acknowledgement triggers. */}
         <Button
-          label="Mark & next"
+          label="Mark Readed & Generate next"
           onPress={() => onMark(answers, written, true)}
           disabled={busy || !ready || digest.coverage_complete}
           full

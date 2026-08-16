@@ -46,7 +46,7 @@ export default function AgentsLayout() {
         swipeEnabled: isMobile,
         overlayColor: 'rgba(0,0,0,0.5)',
       }}>
-      <Drawer.Screen name="assistant" options={{ drawerLabel: 'Assistant', headerShown: true }} />
+      <Drawer.Screen name="assistant" options={{ drawerLabel: 'Assistant', headerShown: false }} />
       <Drawer.Screen
         name="meal-planner"
         options={{ drawerLabel: 'Meal planner', headerShown: false }}

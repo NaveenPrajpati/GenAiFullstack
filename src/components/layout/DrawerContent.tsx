@@ -1,9 +1,9 @@
 import { useAuth } from '@/context/AuthContext';
 import { openLanding } from '@/navigation/apps';
-import { DrawerContentComponentProps, DrawerContentScrollView } from 'expo-router/drawer';
 import { usePathname, useRouter } from 'expo-router';
+import { DrawerContentComponentProps, DrawerContentScrollView } from 'expo-router/drawer';
 import * as Updates from 'expo-updates';
-import { ChevronLeftIcon } from 'lucide-react-native';
+import { ChevronLeftIcon, LogOutIcon } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Text, TouchableOpacity, View } from 'react-native';
 
@@ -183,41 +183,22 @@ export default function DrawerContent(props: DrawerContentComponentProps) {
       </TouchableOpacity>
 
       {/* User profile section */}
-      {user && (
+      {user?.is_guest && (
         <View className="border-b border-gray-700 px-4 py-4">
-          <View className="flex-row items-center gap-3">
-            <View className="h-10 w-10 items-center justify-center rounded-full bg-indigo-500">
-              <Text className="text-sm font-bold text-white">{getInitials(user)}</Text>
+          <View className="mt-3 rounded-xl bg-gray-700 p-3">
+            <View className="mb-2 flex-row items-center gap-1.5">
+              <Text className="text-xs text-amber-400">⏱ {expiry}</Text>
             </View>
-            <View className="flex-1 overflow-hidden">
-              <Text className="text-xs text-gray-400" numberOfLines={1}>
-                {user.email}
-              </Text>
-            </View>
-            {user.is_guest && (
-              <View className="rounded-md bg-amber-500/20 px-2 py-0.5">
-                <Text className="text-xs font-medium text-amber-400">Guest</Text>
-              </View>
-            )}
+            <Text className="mb-2.5 text-xs leading-relaxed text-gray-400">
+              Save your session — create a free account before it expires.
+            </Text>
+            <TouchableOpacity
+              onPress={() => handleNavigate('/auth/convert-guest')}
+              className="items-center rounded-lg bg-indigo-600 py-2"
+              activeOpacity={0.8}>
+              <Text className="text-xs font-semibold text-white">Verify Email & Upgrade</Text>
+            </TouchableOpacity>
           </View>
-
-          {/* Guest expiry + verify email CTA */}
-          {user.is_guest && (
-            <View className="mt-3 rounded-xl bg-gray-700 p-3">
-              <View className="mb-2 flex-row items-center gap-1.5">
-                <Text className="text-xs text-amber-400">⏱ {expiry}</Text>
-              </View>
-              <Text className="mb-2.5 text-xs leading-relaxed text-gray-400">
-                Save your session — create a free account before it expires.
-              </Text>
-              <TouchableOpacity
-                onPress={() => handleNavigate('/auth/convert-guest')}
-                className="items-center rounded-lg bg-indigo-600 py-2"
-                activeOpacity={0.8}>
-                <Text className="text-xs font-semibold text-white">Verify Email & Upgrade</Text>
-              </TouchableOpacity>
-            </View>
-          )}
         </View>
       )}
 
@@ -281,16 +262,22 @@ export default function DrawerContent(props: DrawerContentComponentProps) {
         </View>
       )}
 
-      {/* Logout */}
-      <View className="border-t border-gray-700 p-4">
-        <TouchableOpacity
-          onPress={logout}
-          className="flex-row items-center gap-3 rounded-lg px-3 py-2.5"
-          activeOpacity={0.7}>
-          <View className="h-8 w-8 items-center justify-center rounded-lg bg-gray-800">
-            <Text className="text-base">🚪</Text>
-          </View>
-          <Text className="text-sm font-medium text-gray-400">Sign Out</Text>
+      <View className="flex-row items-center gap-3 border-t border-gray-100 px-4 py-3">
+        <View className="h-9 w-9 items-center justify-center rounded-full bg-violet-100">
+          <Text className="text-sm font-bold text-violet-700">
+            {(user?.name || user?.email || 'G').slice(0, 1).toUpperCase()}
+          </Text>
+        </View>
+        <View className="flex-1">
+          <Text numberOfLines={1} className="text-xs font-semibold text-gray-400">
+            {user?.name || 'Guest'}
+          </Text>
+          <Text numberOfLines={1} className="text-[10px] text-gray-400">
+            {user?.is_guest ? 'Guest workspace' : user?.email}
+          </Text>
+        </View>
+        <TouchableOpacity onPress={logout} hitSlop={8}>
+          <LogOutIcon size={16} color="#9ca3af" />
         </TouchableOpacity>
       </View>
     </View>

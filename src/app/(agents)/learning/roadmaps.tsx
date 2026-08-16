@@ -148,7 +148,13 @@ function StatsStrip({ stats }: { stats: LearningStats }) {
   // failure as evidence about today and stops moving once there's any history, so
   // it reads as a fixed property of the learner.
   if (stats.mastery?.score !== null && stats.mastery?.score !== undefined) {
-    tiles.push({ value: `${stats.mastery.score}%`, label: 'mastery', tone: 'success' });
+    // Carries how many topics it was measured over, for the same reason the
+    // Today tile does: it is the mean over graded topics, not over the roadmap.
+    tiles.push({
+      value: `${stats.mastery.score}%`,
+      label: `mastery · ${stats.mastery.topics_scored} graded`,
+      tone: 'success',
+    });
   }
 
   return (

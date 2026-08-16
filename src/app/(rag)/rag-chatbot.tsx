@@ -12,6 +12,8 @@ import {
   RagSource,
 } from '@/features/rag/ragTypes';
 import { openAgentsApp, openLanding } from '@/navigation/apps';
+import { BASE_URL, RagApis } from '@/services/api';
+import { authedFetch, http } from '@/services/http';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import { DocumentPickerAsset } from 'expo-document-picker';
@@ -52,8 +54,6 @@ import {
   View,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { BASE_URL, RagApis } from '@/services/api';
-import { authedFetch, http } from '@/services/http';
 
 const VIOLET = '#7c3aed';
 const VIEW_MODE_KEY = 'rag_view_mode'; // 'dev' | 'user' — Developer view is the default
@@ -581,21 +581,6 @@ export default function RagChatbotScreen() {
         {/* The way out of this app. RAG has its own navigator, so the agent
             suite isn't a route away — leaving relaunches into it, with nothing
             left behind to go back to. See `@/navigation/apps`. */}
-        <TouchableOpacity
-          onPress={() => openAgentsApp()}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Explore the other agents"
-          className="mt-4 flex-row items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5">
-          <View className="h-7 w-7 items-center justify-center rounded-lg bg-indigo-100">
-            <LayoutGridIcon size={14} color="#4f46e5" />
-          </View>
-          <View className="flex-1">
-            <Text className="text-xs font-semibold text-gray-700">Explore other agents</Text>
-            <Text className="text-[10px] text-gray-400">Assistant, learning, tasks & meals</Text>
-          </View>
-          <ArrowRightIcon size={14} color="#9ca3af" />
-        </TouchableOpacity>
 
         {/* Documents */}
         <Text className="mt-6 mb-2 text-[11px] font-semibold tracking-wide text-gray-400 uppercase">
@@ -734,7 +719,21 @@ export default function RagChatbotScreen() {
         )}
       </ScrollView>
 
-      {/* User footer */}
+      <TouchableOpacity
+        onPress={() => openAgentsApp()}
+        activeOpacity={0.8}
+        accessibilityRole="button"
+        accessibilityLabel="Explore the other agents"
+        className="m-4 flex-row items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5">
+        <View className="h-7 w-7 items-center justify-center rounded-lg bg-indigo-100">
+          <LayoutGridIcon size={14} color="#4f46e5" />
+        </View>
+        <View className="flex-1">
+          <Text className="text-xs font-semibold text-gray-700">Explore other agents</Text>
+          <Text className="text-[10px] text-gray-400">Assistant, learning, tasks & meals</Text>
+        </View>
+        <ArrowRightIcon size={14} color="#9ca3af" />
+      </TouchableOpacity>
       <View className="flex-row items-center gap-3 border-t border-gray-100 px-4 py-3">
         <View className="h-9 w-9 items-center justify-center rounded-full bg-violet-100">
           <Text className="text-sm font-bold text-violet-700">

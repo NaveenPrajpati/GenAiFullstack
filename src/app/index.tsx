@@ -6,21 +6,8 @@
  * replaces the root stack entry, so choosing a product commits to it, and the
  * way back is that product's own "home" affordance rather than a back gesture.
  */
-import { apiClient, useAuth } from '@/context/AuthContext';
 import { openAgentsApp, openRagApp } from '@/navigation/apps';
-import { UserApis } from '@/services/api';
-import Constants from 'expo-constants';
-import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
-import { useEffect } from 'react';
-import {
-  Platform,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { ScrollView, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 /**
  * The supervisor sits above the three agents rather than beside them, so it gets
@@ -90,21 +77,16 @@ const SKILLS = [
   },
 ] as const;
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    // `shouldShowAlert` split into banner + list in expo-notifications SDK 53;
-    // both true is the equivalent of the old single flag.
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
 const CONTENT_MAX_WIDTH = 1180;
 const CARD_GAP = 20;
 
+// Push registration used to live here, which tied it to visiting the launcher —
+// and this screen unmounts the moment any card is tapped, since launching
+// replaces the root entry. It now sits in the root layout, above every world,
+// where it can also outlive a screen long enough to act on a tap. See
+// `@/features/notifications/push`.
+
 export default function LandingScreen() {
-  const { token } = useAuth();
   const { width } = useWindowDimensions();
 
   // Mobile stays single column; web/tablet grows into a 2 or 3 column grid
@@ -113,63 +95,18 @@ export default function LandingScreen() {
   const contentWidth = Math.min(width, CONTENT_MAX_WIDTH);
   const cardWidth = columns === 1 ? '100%' : (contentWidth - CARD_GAP * (columns - 1)) / columns;
 
-  useEffect(() => {
-    if (!token || Platform.OS === 'web') return;
-    registerForPushNotificationsAsync()
-      .then((pushToken) => {
-        if (pushToken) {
-          // Send this token to the FastAPI backend, mapped to the user via the auth header.
-          apiClient(token)
-            .patch(UserApis.pushToken, { expo_push_token: pushToken })
-            .catch((err) => console.log('registerPushToken', err));
-        }
-      })
-      .catch((err) => console.log('registerForPushNotificationsAsync', err));
-  }, [token]);
-
-  async function registerForPushNotificationsAsync() {
-    let token;
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('default', {
-        name: 'default',
-        importance: Notifications.AndroidImportance.MAX,
-      });
-    }
-
-    if (Device.isDevice) {
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-      if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-      }
-      if (finalStatus !== 'granted') {
-        alert('Failed to get push token for push notification!');
-        return;
-      }
-      // projectId is auto-resolved in dev, but MUST be passed explicitly in
-      // standalone/preview builds or getExpoPushTokenAsync() throws.
-      const projectId =
-        Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
-      if (!projectId) {
-        console.log('registerForPushNotificationsAsync', 'Missing EAS projectId');
-        return;
-      }
-      // Extract the exact stable Expo token string format
-      token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-    } else {
-      alert('Must use physical device for Push Notifications');
-    }
-
-    return token;
-  }
-
   const isGrid = columns > 1;
 
   return (
     // No drawer above this screen any more, so nothing else is keeping the
     // header clear of the status bar.
-    <SafeAreaView edges={['top']} className="flex-1 bg-white">
+    //
+    // `flex: 1` goes through `style`, not `className`, as it does on every other
+    // SafeAreaView in the app: this is a third-party component, and the class
+    // that never lands is the one holding the screen open — leaving a host with
+    // no height for the ScrollView inside it, which renders as a blank screen
+    // rather than as an error.
+    <SafeAreaView edges={['top']} style={{ flex: 1 }} className="bg-white">
       <ScrollView className="flex-1 bg-gray-50">
         {/* Header */}
         <View className="items-center border-b border-gray-200 bg-white px-6 py-10">

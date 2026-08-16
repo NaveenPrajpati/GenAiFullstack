@@ -1,6 +1,7 @@
 import { useColors, useTheme, useThemeSync } from '@/components/ui/theme';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { useLearningStore } from '@/features/learning/store';
+import { usePushNotifications } from '@/features/notifications/push';
 import { Stack, usePathname, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -87,6 +88,21 @@ function RootNavigator() {
   // `isReady` alone would expose that intermediate screen, so the splash waits
   // for the route to agree with the session.
   const routeSettled = token ? !inAuth || onAuthedAuthRoute : inAuth;
+
+  // Registers this device with the backend, and sends a tapped notification to
+  // the screen it refers to.
+  //
+  // Mounted here rather than on a screen because every screen is disposable:
+  // crossing between the launcher, the drawer app and RAG *replaces* the root
+  // entry, so a listener living on any of them dies at the first launch. This
+  // component is the only thing that outlives all three.
+  //
+  // Navigation is held until the route agrees with the session — the same
+  // condition the splash waits on. A deep link delivered before then is undone
+  // a frame later by the redirect above; held until after, it lands on a tree
+  // that has stopped moving. A tap while signed out therefore survives the trip
+  // through the login screen rather than being dropped.
+  usePushNotifications({ token, canNavigate: mounted && isReady && routeSettled });
 
   // Everything the first frame depends on is now known: the session, the saved
   // theme, and the route. Anything slower than this — the widget seed, stats,

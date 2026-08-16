@@ -50,7 +50,14 @@ function statTiles(stats: LearningStats): Stat[] {
   if (mastery?.score !== null && mastery?.score !== undefined) {
     tiles.push({
       value: `${mastery.score}%${TREND_MARK[mastery.trend]}`,
-      label: 'mastery',
+      // The denominator is part of the number. Mastery is the mean over topics
+      // that have been *graded*, not over the roadmap — so two passed
+      // checkpoints out of twenty-one topics reads 99%, and beside a "2/21
+      // topics" tile that looks like a claim on the whole subject. Naming what
+      // it was measured over is the difference between a strong number and a
+      // misleading one. "Graded" rather than "completed" on purpose: a recall
+      // check on the topic you are mid-way through counts too.
+      label: `mastery · ${mastery.topics_scored} graded`,
       tone: mastery.trend === 'slipping' ? 'warning' : 'success',
     });
   }
