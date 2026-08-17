@@ -1,8 +1,16 @@
 import ScreenHeader from '@/components/ui/ScreenHeader';
-import { useColors } from '@/components/ui/theme';
 import SectionNav, { useWideNav } from '@/components/ui/SectionNav';
+import { useColors } from '@/components/ui/theme';
 import { useLearningStore } from '@/features/learning/store';
-import type { Difficulty, Memory } from '@/features/learning/types';
+import type {
+  Difficulty,
+  ExplanationStyle,
+  LearningAvailability,
+  Memory,
+  PreferredResourceType,
+  QuizDifficulty,
+} from '@/features/learning/types';
+import { Picker } from '@expo/ui/community/picker';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -23,16 +31,155 @@ const strToArr = (s: string) =>
     .map((x) => x.trim())
     .filter(Boolean);
 
-const SKILL_LEVELS: Difficulty[] = ['beginner', 'intermediate', 'advanced'];
+/** Parses a numeric field, clamped to the range the server accepts so a typo
+ *  cannot turn a save into a 422. An empty or unparseable field is `undefined`,
+ *  which drops the key and clears the stored value. */
+const toInt = (s: string, min?: number, max?: number) => {
+  const n = parseInt(s, 10);
+  if (!Number.isFinite(n)) return undefined;
+  return Math.min(max ?? n, Math.max(min ?? n, n));
+};
+
+/** One selectable value plus the wording shown for it. The values are the
+ *  server's enums verbatim; only the labels are ours to phrase. */
+type Option<T extends string> = { value: T; label: string };
+
+const SKILL_LEVELS: Option<Difficulty>[] = [
+  { value: 'beginner', label: 'Beginner' },
+  { value: 'intermediate', label: 'Intermediate' },
+  { value: 'advanced', label: 'Advanced' },
+];
+
+const RESOURCE_TYPES: Option<PreferredResourceType>[] = [
+  { value: 'video', label: 'Videos' },
+  { value: 'article', label: 'Articles' },
+  { value: 'documentation', label: 'Documentation' },
+  { value: 'interactive', label: 'Interactive' },
+  { value: 'project', label: 'Projects' },
+  { value: 'book', label: 'Books' },
+];
+
+const EXPLANATION_STYLES: Option<ExplanationStyle>[] = [
+  { value: 'concise', label: 'Concise' },
+  { value: 'step_by_step', label: 'Step by step' },
+  { value: 'examples_first', label: 'Examples first' },
+  { value: 'visual', label: 'Visual' },
+  { value: 'socratic', label: 'Socratic — ask me questions' },
+];
+
+const QUIZ_DIFFICULTIES: Option<QuizDifficulty>[] = [
+  { value: 'easy', label: 'Easy' },
+  { value: 'adaptive', label: 'Adaptive' },
+  { value: 'challenging', label: 'Challenging' },
+];
+
+/** Narrows a stored value to one of `options`, so a profile written by an older
+ *  build (or by the agent itself) can never put the form into a state the
+ *  server would reject on the next save. */
+const asOption = <T extends string>(options: Option<T>[], value?: string): T | '' =>
+  options.find((o) => o.value === value)?.value ?? '';
+
+const asOptions = <T extends string>(options: Option<T>[], values?: string[]): T[] =>
+  options.filter((o) => (values ?? []).includes(o.value)).map((o) => o.value);
 
 type FormState = {
-  skill_level: string;
-  preferred_resource_types: string;
+  skill_level: Difficulty | '';
+  preferred_resource_types: PreferredResourceType[];
+  preferred_explanation_style: ExplanationStyle | '';
+  preferred_quiz_difficulty: QuizDifficulty | '';
   goals: string;
   /** Backs `availability.minutes_per_day`, which is what the backend stores. */
   minutes_per_day: string;
+  /** Backs `availability.days_per_week`. */
+  days_per_week: string;
   known_topics: string;
 };
+
+const EMPTY_FORM: FormState = {
+  skill_level: '',
+  preferred_resource_types: [],
+  preferred_explanation_style: '',
+  preferred_quiz_difficulty: '',
+  goals: '',
+  minutes_per_day: '',
+  days_per_week: '',
+  known_topics: '',
+};
+
+/** An enum field, backed by a native picker. The leading empty option is what
+ *  clears the preference — the server treats every one of these as optional. */
+function SelectField<T extends string>({
+  label,
+  hint,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  options: Option<T>[];
+  value: T | '';
+  onChange: (value: T | '') => void;
+}) {
+  const colors = useColors();
+  return (
+    <View className="mb-4">
+      <Text className="text-ink-faint mb-0.5 text-xs font-semibold">{label}</Text>
+      {!!hint && <Text className="text-ink-faint mb-1 text-xs">{hint}</Text>}
+      <View className="border-line bg-surface-alt overflow-hidden rounded-xl border px-2">
+        <Picker selectedValue={value} onValueChange={(v) => onChange(v as T | '')}>
+          <Picker.Item label="No preference" value="" color={colors.inkFaint} />
+          {options.map((o) => (
+            <Picker.Item key={o.value} label={o.label} value={o.value} color={colors.ink} />
+          ))}
+        </Picker>
+      </View>
+    </View>
+  );
+}
+
+/** The list-valued enum fields. A picker takes one value, so these are chips. */
+function ChipField<T extends string>({
+  label,
+  hint,
+  options,
+  values,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  options: Option<T>[];
+  values: T[];
+  onChange: (values: T[]) => void;
+}) {
+  const toggle = (value: T) =>
+    onChange(values.includes(value) ? values.filter((v) => v !== value) : [...values, value]);
+
+  return (
+    <View className="mb-4">
+      <Text className="text-ink-faint mb-0.5 text-xs font-semibold">{label}</Text>
+      {!!hint && <Text className="text-ink-faint mb-2 text-xs">{hint}</Text>}
+      <View className="flex-row flex-wrap gap-1.5">
+        {options.map((o) => {
+          const on = values.includes(o.value);
+          return (
+            <TouchableOpacity
+              key={o.value}
+              onPress={() => toggle(o.value)}
+              className={`rounded-lg border px-2.5 py-1.5 ${
+                on ? 'border-primary bg-primary-soft' : 'border-line bg-surface-alt'
+              }`}
+              activeOpacity={0.7}>
+              <Text className={`text-xs ${on ? 'text-primary font-medium' : 'text-ink-soft'}`}>
+                {o.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
 
 export default function SettingsScreen() {
   const {
@@ -52,13 +199,7 @@ export default function SettingsScreen() {
   } = useLearningStore();
 
   const colors = useColors();
-  const [form, setForm] = useState<FormState>({
-    skill_level: '',
-    preferred_resource_types: '',
-    goals: '',
-    minutes_per_day: '',
-    known_topics: '',
-  });
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -100,10 +241,16 @@ export default function SettingsScreen() {
   useEffect(() => {
     if (memory) {
       setForm({
-        skill_level: memory.skill_level ?? '',
-        preferred_resource_types: arrToStr(memory.preferred_resource_types),
+        skill_level: asOption(SKILL_LEVELS, memory.skill_level),
+        preferred_resource_types: asOptions(RESOURCE_TYPES, memory.preferred_resource_types),
+        preferred_explanation_style: asOption(
+          EXPLANATION_STYLES,
+          memory.preferred_explanation_style
+        ),
+        preferred_quiz_difficulty: asOption(QUIZ_DIFFICULTIES, memory.preferred_quiz_difficulty),
         goals: arrToStr(memory.goals),
         minutes_per_day: memory.availability?.minutes_per_day?.toString() ?? '',
+        days_per_week: memory.availability?.days_per_week?.toString() ?? '',
         known_topics: arrToStr(memory.known_topics),
       });
     }
@@ -113,16 +260,23 @@ export default function SettingsScreen() {
     setSaving(true);
     setError('');
     try {
-      const minutes = parseInt(form.minutes_per_day, 10);
+      // `availability` is a single nested object on the server, so it goes up
+      // whole — merged onto what is already stored so the parts this form does
+      // not expose (`preferred_days`, `deadline`) survive the save.
+      const availability: LearningAvailability = {
+        ...(memory?.availability ?? {}),
+        minutes_per_day: toInt(form.minutes_per_day),
+        days_per_week: toInt(form.days_per_week, 1, 7),
+      };
       const data: Partial<Memory> = {
-        // The backend types skill_level as an enum, so only send a recognised
-        // value — free text would be rejected by the profile schema.
-        skill_level: SKILL_LEVELS.find((l) => l === form.skill_level.trim().toLowerCase()),
-        preferred_resource_types: strToArr(form.preferred_resource_types),
+        // Every enum below is optional on the server and each control's empty
+        // option means "no preference", which is sent as an omitted field.
+        skill_level: form.skill_level || undefined,
+        preferred_resource_types: form.preferred_resource_types,
+        preferred_explanation_style: form.preferred_explanation_style || undefined,
+        preferred_quiz_difficulty: form.preferred_quiz_difficulty || undefined,
         goals: strToArr(form.goals),
-        availability: Number.isFinite(minutes)
-          ? { ...(memory?.availability ?? {}), minutes_per_day: minutes }
-          : undefined,
+        availability: Object.values(availability).some((v) => v != null) ? availability : undefined,
         known_topics: strToArr(form.known_topics),
       };
       await saveMemory(data);
@@ -145,13 +299,7 @@ export default function SettingsScreen() {
           setClearing(true);
           try {
             await deleteMemory();
-            setForm({
-              skill_level: '',
-              preferred_resource_types: '',
-              goals: '',
-              minutes_per_day: '',
-              known_topics: '',
-            });
+            setForm(EMPTY_FORM);
           } catch (e: any) {
             setError(e?.response?.data?.detail ?? 'Failed to clear memory.');
           } finally {
@@ -172,8 +320,10 @@ export default function SettingsScreen() {
     }
   };
 
-  const setField = (key: keyof FormState) => (value: string) =>
-    setForm((f) => ({ ...f, [key]: value }));
+  const setField =
+    <K extends keyof FormState>(key: K) =>
+    (value: FormState[K]) =>
+      setForm((f) => ({ ...f, [key]: value }));
 
   const wide = useWideNav();
 
@@ -286,30 +436,60 @@ export default function SettingsScreen() {
             </View>
           ) : (
             <>
-              <View className="mb-4">
-                <Text className="text-ink-faint mb-1 text-xs font-semibold">Skill Level</Text>
-                <TextInput
-                  className="border-line bg-surface-alt text-ink rounded-xl border px-4 py-3 text-sm"
-                  placeholder="e.g. beginner, intermediate, advanced"
-                  placeholderTextColor={colors.inkFaint}
-                  value={form.skill_level}
-                  onChangeText={setField('skill_level')}
-                />
-              </View>
+              <SelectField
+                label="Skill Level"
+                options={SKILL_LEVELS}
+                value={form.skill_level}
+                onChange={setField('skill_level')}
+              />
+
+              <ChipField
+                label="Preferred Resources"
+                hint="What you want to be taught with — pick as many as you like"
+                options={RESOURCE_TYPES}
+                values={form.preferred_resource_types}
+                onChange={setField('preferred_resource_types')}
+              />
+
+              <SelectField
+                label="Explanation Style"
+                hint="How the AI should walk you through a new topic"
+                options={EXPLANATION_STYLES}
+                value={form.preferred_explanation_style}
+                onChange={setField('preferred_explanation_style')}
+              />
+
+              <SelectField
+                label="Quiz Difficulty"
+                hint="How hard recall checks and quizzes should be"
+                options={QUIZ_DIFFICULTIES}
+                value={form.preferred_quiz_difficulty}
+                onChange={setField('preferred_quiz_difficulty')}
+              />
 
               <View className="mb-4">
                 <Text className="text-ink-faint mb-0.5 text-xs font-semibold">Available Time</Text>
                 <Text className="text-ink-faint mb-1 text-xs">
-                  Minutes you can study per day — used to pace your roadmap
+                  Used to pace your roadmap — minutes per day, and how many days a week
                 </Text>
-                <TextInput
-                  className="border-line bg-surface-alt text-ink rounded-xl border px-4 py-3 text-sm"
-                  placeholder="e.g. 60"
-                  placeholderTextColor={colors.inkFaint}
-                  keyboardType="number-pad"
-                  value={form.minutes_per_day}
-                  onChangeText={setField('minutes_per_day')}
-                />
+                <View className="flex-row gap-2">
+                  <TextInput
+                    className="border-line bg-surface-alt text-ink flex-1 rounded-xl border px-4 py-3 text-sm"
+                    placeholder="e.g. 60 min/day"
+                    placeholderTextColor={colors.inkFaint}
+                    keyboardType="number-pad"
+                    value={form.minutes_per_day}
+                    onChangeText={setField('minutes_per_day')}
+                  />
+                  <TextInput
+                    className="border-line bg-surface-alt text-ink flex-1 rounded-xl border px-4 py-3 text-sm"
+                    placeholder="e.g. 5 days/wk"
+                    placeholderTextColor={colors.inkFaint}
+                    keyboardType="number-pad"
+                    value={form.days_per_week}
+                    onChangeText={setField('days_per_week')}
+                  />
+                </View>
               </View>
 
               <View className="mb-4">
@@ -321,20 +501,6 @@ export default function SettingsScreen() {
                   placeholderTextColor={colors.inkFaint}
                   value={form.goals}
                   onChangeText={setField('goals')}
-                />
-              </View>
-
-              <View className="mb-4">
-                <Text className="text-ink-faint mb-0.5 text-xs font-semibold">
-                  Preferred Resources
-                </Text>
-                <Text className="text-ink-faint mb-1 text-xs">Comma-separated</Text>
-                <TextInput
-                  className="border-line bg-surface-alt text-ink rounded-xl border px-4 py-3 text-sm"
-                  placeholder="e.g. videos, articles, interactive exercises"
-                  placeholderTextColor={colors.inkFaint}
-                  value={form.preferred_resource_types}
-                  onChangeText={setField('preferred_resource_types')}
                 />
               </View>
 

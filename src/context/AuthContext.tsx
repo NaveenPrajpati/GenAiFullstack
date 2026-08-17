@@ -1,3 +1,4 @@
+import { clearLearningCache } from '@/features/learning/cache';
 import { BASE_URL, UserApis } from '@/services/api';
 import { setOnSessionExpired } from '@/services/http';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -180,6 +181,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // ignore — local sign-out below is what matters to the user
     }
     await AsyncStorage.multiRemove([TOKEN_KEY, REFRESH_KEY, USER_KEY]);
+    // The learning cache holds this account's roadmaps and digests verbatim, so
+    // it goes with the session — otherwise the next person to sign in on this
+    // device sees the last one's Today until the first fetch lands.
+    await clearLearningCache();
     setToken(null);
     setRefreshToken(null);
     setUser(null);

@@ -90,7 +90,7 @@ function WeakestTopics({ mastery }: { mastery: MasterySummary }) {
             <Text className="text-ink text-[15px] font-medium" numberOfLines={1}>
               {t.title}
             </Text>
-            <Text className="text-ink-faint text-[11px]" numberOfLines={1}>
+            <Text className="text-ink-faint text-[13px]" numberOfLines={1}>
               {t.overdue_days > 0
                 ? `review ${t.overdue_days}d overdue`
                 : `${t.attempts} attempt${t.attempts === 1 ? '' : 's'}`}
@@ -116,6 +116,51 @@ function untilNext(iso: string): string {
   if (at.toDateString() === new Date(Date.now() + 86_400_000).toDateString())
     return `tomorrow ${clock}`;
   return `${at.toLocaleDateString(undefined, { weekday: 'short' })} ${clock}`;
+}
+
+/** "3 min ago" / "yesterday" — how old the cached Today on screen is. */
+function savedAgo(iso: string): string {
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (mins < 2) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return days === 1 ? 'yesterday' : `${days} days ago`;
+}
+
+/**
+ * The one line that tells the learner the screen isn't live.
+ *
+ * Two different things are worth saying and they can be true at once, so the
+ * more consequential one wins: unsynced work is a promise the app has made on
+ * the server's behalf, while stale content is only stale.
+ *
+ * `stale` is deliberately both conditions — content did come off disk *and*
+ * nothing has reached the server since. Either alone is a false alarm: a cache
+ * that has already been refreshed is live, and an empty Today with no cache
+ * behind it has nothing to be stale about.
+ */
+function OfflineNotice({
+  savedAt,
+  reachedServer,
+  pending,
+}: {
+  savedAt: string | null;
+  reachedServer: boolean;
+  pending: number;
+}) {
+  const stale = !!savedAt && !reachedServer;
+  if (!stale && pending === 0) return null;
+  return (
+    <View className="border-line bg-surface-alt mb-3 rounded-xl border px-3.5 py-2.5">
+      <Text className="text-ink-soft text-[13px]">
+        {pending > 0
+          ? `${pending === 1 ? '1 digest' : `${pending} digests`} marked offline — syncing when you're back online`
+          : `Offline — showing your saved digests from ${savedAgo(savedAt!)}`}
+      </Text>
+    </View>
+  );
 }
 
 /** Nothing running: either there's no roadmap at all, or every one is parked. */
@@ -281,6 +326,10 @@ export default function LearningHome() {
     focus,
     fetchFocus,
     generateNextDigest,
+    cacheSavedAt,
+    reachedServer,
+    pendingMarks,
+    flushPendingMarks,
   } = useLearningStore();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -292,6 +341,10 @@ export default function LearningHome() {
 
   useFocusEffect(
     useCallback(() => {
+      // Anything already cached is on screen by now; these refresh it in the
+      // background. Draining first means a mark made offline is settled with the
+      // server before the fetches below ask it what the queue looks like.
+      flushPendingMarks();
       fetchUnreadDigests();
       fetchStats();
       fetchReviews();
@@ -325,6 +378,10 @@ export default function LearningHome() {
     setError('');
     try {
       const result = await markDigest(digest._id, { answers, written, generateNext });
+      // Banked offline: the card is gone and the queue notice explains why, so
+      // the "no next digest" reasoning below — all of which reads the server's
+      // reply — has nothing to work with and would only mislead.
+      if (result.queued) return;
       if (generateNext && !result.generated) {
         // No next digest has three different causes, and only one of them is
         // "nothing to send". Reporting them all the same way told a learner who
@@ -376,6 +433,12 @@ export default function LearningHome() {
               </View>
             )}
 
+            <OfflineNotice
+              savedAt={cacheSavedAt}
+              reachedServer={reachedServer}
+              pending={pendingMarks.length}
+            />
+
             {!!error && (
               <View className="border-danger bg-danger-soft mb-3 rounded-xl border p-3">
                 <Text className="text-danger text-[13px]">{error}</Text>
@@ -392,7 +455,7 @@ export default function LearningHome() {
                     <SectionLabel>
                       {running > 0 ? `Running · ${running} of ${maxActive}` : 'Roadmaps'}
                     </SectionLabel>
-                    <Text className="text-ink-faint text-[11px]">
+                    <Text className="text-ink-faint text-[13px]">
                       {focus.next_at
                         ? `Next digest ${untilNext(focus.next_at)}`
                         : 'No digest scheduled'}

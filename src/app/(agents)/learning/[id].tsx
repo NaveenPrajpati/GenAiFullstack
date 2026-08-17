@@ -31,6 +31,8 @@ const FIELD_LABELS: Record<string, string> = {
   skill_level: 'Level',
   goals: 'Goals',
   preferred_resource_types: 'Resources',
+  preferred_explanation_style: 'Explanation style',
+  preferred_quiz_difficulty: 'Quiz difficulty',
   availability: 'Time',
   known_topics: 'Already known',
 };
@@ -151,11 +153,79 @@ function groupByStages(roadmap: Roadmap) {
 }
 
 /**
+ * What tapping a topic does, which depends on where that topic stands rather
+ * than on any one toggle: it starts it, opens a checkpoint, fetches the revision
+ * a failed attempt owes, or un-completes it.
+ *
+ * One function because the dot and the expanded card's button run the same
+ * `handleToggle` and were describing it twice. The visible half had all five
+ * cases; the screen-reader half had "Mark X complete" for every one of them, so
+ * a control that launches a checkpoint announced itself as a checkbox being
+ * ticked. Anything added here has to be said in both places or in neither.
+ */
+function topicAction({
+  done,
+  owed,
+  ready,
+  started,
+}: {
+  done: boolean;
+  owed: boolean;
+  ready: boolean;
+  started: boolean;
+}): {
+  /** The expanded card's button, emoji and all. */
+  label: string;
+  /** Where the topic stands — the dot's accessibility label, after its title. */
+  status: string;
+  /** What tapping will do, announced after the label. */
+  hint: string;
+} {
+  if (done) {
+    return {
+      label: '✓ Completed — mark as not done',
+      status: 'completed',
+      hint: 'Marks this topic as not done',
+    };
+  }
+  if (owed) {
+    return {
+      label: '📘 Revise before retrying',
+      status: 'revision owed',
+      hint: 'Opens the revision this topic owes before another checkpoint attempt',
+    };
+  }
+  if (ready) {
+    return {
+      label: 'Take the final checkpoint',
+      status: 'ready for its checkpoint',
+      hint: 'Opens the final checkpoint for this topic',
+    };
+  }
+  if (started) {
+    return {
+      label: 'Take checkpoint to complete',
+      status: 'in progress',
+      hint: 'Opens the checkpoint that completes this topic',
+    };
+  }
+  return {
+    label: 'Start this topic',
+    status: 'not started',
+    hint: 'Starts this topic and turns on its daily tips',
+  };
+}
+
+/**
  * The rail down the left of the topic list: one dot per topic, joined by a line.
  *
  * The dot is also the completion control, which is why it carries a hit slop far
  * larger than it looks — at 20px across it was easy to miss entirely, and that
  * made the tracker look like it had no way to record anything.
+ *
+ * It is a `button`, not a `checkbox`: only one of the five things it can do is
+ * ticking anything off. The state it reports lives in the label instead, where
+ * it can name what is actually about to happen.
  */
 function TopicDot({
   done,
@@ -163,6 +233,7 @@ function TopicDot({
   started,
   last,
   label,
+  hint,
   onPress,
 }: {
   done: boolean;
@@ -170,6 +241,7 @@ function TopicDot({
   started: boolean;
   last: boolean;
   label: string;
+  hint: string;
   onPress: () => void;
 }) {
   const ring = done
@@ -185,9 +257,9 @@ function TopicDot({
       <TouchableOpacity
         onPress={onPress}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: done }}
+        accessibilityRole="button"
         accessibilityLabel={label}
+        accessibilityHint={hint}
         className={`mt-1.5 h-4 w-4 items-center justify-center rounded-full border-2 ${ring}`}>
         {done && <Text className="text-on-primary text-[9px] font-bold">✓</Text>}
       </TouchableOpacity>
@@ -610,6 +682,9 @@ export default function RoadmapDetail() {
                       // the server enforces it — so the button says so rather
                       // than offering an attempt that will be refused.
                       const owed = revisionOwed(topic);
+                      // One description of the tap, shared by the dot and the
+                      // button below it — see `topicAction`.
+                      const action = topicAction({ done, owed, ready, started });
                       const duration = formatMinutes(topic.estimated_minutes);
                       const isCheckpointOpen = checkpoint?.topicId === topic.id;
                       const noteCount = insights[roadmap._id]?.note_counts?.[topic.id] ?? 0;
@@ -628,11 +703,8 @@ export default function RoadmapDetail() {
                             ready={ready}
                             started={started}
                             last={idx === topics.length - 1}
-                            label={
-                              done
-                                ? `Mark ${topic.title} not started`
-                                : `Mark ${topic.title} complete`
-                            }
+                            label={`${topic.title}, ${action.status}`}
+                            hint={action.hint}
                             onPress={() => handleToggle(topic)}
                           />
 
@@ -652,7 +724,7 @@ export default function RoadmapDetail() {
                                   {topic.order}. {topic.title}
                                 </Text>
                                 {!!meta && (
-                                  <Text className="text-ink-faint text-[11px]">{meta}</Text>
+                                  <Text className="text-ink-faint text-[13px]">{meta}</Text>
                                 )}
                               </TouchableOpacity>
                             ) : (
@@ -734,28 +806,19 @@ export default function RoadmapDetail() {
                                 {!isCheckpointOpen && (
                                   <View className="mt-4">
                                     <Button
-                                      label={
-                                        done
-                                          ? '✓ Completed — mark as not done'
-                                          : owed
-                                            ? '📘 Revise before retrying'
-                                            : ready
-                                              ? 'Take the final checkpoint'
-                                              : started
-                                                ? 'Take checkpoint to complete'
-                                                : 'Start this topic'
-                                      }
+                                      label={action.label}
+                                      accessibilityHint={action.hint}
                                       variant={done ? 'secondary' : 'primary'}
                                       loading={checkpointLoading && !done}
                                       onPress={() => handleToggle(topic)}
                                     />
                                     {!done && !started && !ready && (
-                                      <Text className="text-ink-faint mt-1.5 text-[11px]">
+                                      <Text className="text-ink-faint mt-1.5 text-[13px]">
                                         Starting it turns on daily tips for this topic.
                                       </Text>
                                     )}
                                     {ready && !owed && (
-                                      <Text className="text-ink-faint mt-1.5 text-[11px]">
+                                      <Text className="text-ink-faint mt-1.5 text-[13px]">
                                         The tips have covered this topic — pass the checkpoint to
                                         complete it.
                                       </Text>
@@ -765,7 +828,7 @@ export default function RoadmapDetail() {
                                         question is whether they find out by being
                                         turned away. */}
                                     {owed && (
-                                      <Text className="text-warning mt-1.5 text-[11px]">
+                                      <Text className="text-warning mt-1.5 text-[13px]">
                                         That last attempt didn&apos;t pass — a short revision comes
                                         first.
                                       </Text>

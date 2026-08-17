@@ -61,14 +61,14 @@ function DigestCard({
           repeating itself. */}
       {digest.kind === 'reteach' && (
         <View className="bg-primary-soft mb-2 self-start rounded-lg px-2.5 py-1">
-          <Text className="text-primary text-[11px] font-semibold">
+          <Text className="text-primary text-[13px] font-semibold">
             ✍️ Explained a different way
           </Text>
         </View>
       )}
       {digest.kind === 'revision' && (
         <View className="bg-warning-soft mb-2 self-start rounded-lg px-2.5 py-1">
-          <Text className="text-warning text-[11px] font-semibold">
+          <Text className="text-warning text-[13px] font-semibold">
             🔁 Revision before your retry
           </Text>
         </View>
@@ -154,41 +154,46 @@ function DigestCard({
                     className="border-line bg-surface text-ink min-h-[64px] rounded-xl border p-3 text-[15px] leading-relaxed"
                     accessibilityLabel={q.question}
                   />
-                  <Text className="text-ink-faint mt-1 text-[11px]">
+                  <Text className="text-ink-faint mt-1 text-[13px]">
                     A sentence is plenty — the keyboard mic works too.
                   </Text>
                 </>
               )}
 
-              {q.options.map((opt, optIdx) => {
-                const isSel = selected[qIdx] === optIdx;
-                return (
-                  <TouchableOpacity
-                    key={optIdx}
-                    disabled={busy}
-                    onPress={() =>
-                      setSelected((prev) => {
-                        const next = [...prev];
-                        next[qIdx] = optIdx;
-                        return next;
-                      })
-                    }
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: isSel }}
-                    className={`mb-1.5 flex-row items-center gap-2.5 rounded-xl border px-3 py-2.5 ${
-                      isSel ? 'border-primary bg-primary-soft' : 'border-line bg-surface'
-                    }`}
-                    activeOpacity={0.7}>
-                    <View
-                      className={`h-4 w-4 items-center justify-center rounded-full border-2 ${
-                        isSel ? 'border-primary' : 'border-line'
-                      }`}>
-                      {isSel && <View className="bg-primary h-2 w-2 rounded-full" />}
-                    </View>
-                    <Text className="text-ink flex-1 text-[15px]">{opt}</Text>
-                  </TouchableOpacity>
-                );
-              })}
+              {/* Grouped, so the options are announced as one set of N and the
+                  question is repeated with them — the same treatment
+                  `CheckpointCard` gives the identical interaction. */}
+              <View accessibilityRole="radiogroup" accessibilityLabel={q.question}>
+                {q.options.map((opt, optIdx) => {
+                  const isSel = selected[qIdx] === optIdx;
+                  return (
+                    <TouchableOpacity
+                      key={optIdx}
+                      disabled={busy}
+                      onPress={() =>
+                        setSelected((prev) => {
+                          const next = [...prev];
+                          next[qIdx] = optIdx;
+                          return next;
+                        })
+                      }
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: isSel }}
+                      className={`mb-1.5 flex-row items-center gap-2.5 rounded-xl border px-3 py-2.5 ${
+                        isSel ? 'border-primary bg-primary-soft' : 'border-line bg-surface'
+                      }`}
+                      activeOpacity={0.7}>
+                      <View
+                        className={`h-4 w-4 items-center justify-center rounded-full border-2 ${
+                          isSel ? 'border-primary' : 'border-line'
+                        }`}>
+                        {isSel && <View className="bg-primary h-2 w-2 rounded-full" />}
+                      </View>
+                      <Text className="text-ink flex-1 text-[15px]">{opt}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
           ))}
           {/* Two failures on one check and the agent stops asking them to re-read
@@ -229,7 +234,7 @@ function DigestCard({
 
       <View className="mt-4 flex-row gap-2.5">
         <Button
-          label="Mark Readed "
+          label="Mark read"
           variant="secondary"
           onPress={() => onMark(answers, written, false)}
           disabled={!ready}
@@ -239,7 +244,7 @@ function DigestCard({
         {/* Generating costs a search and an LLM call, so it stays an explicit
             choice rather than something every acknowledgement triggers. */}
         <Button
-          label="Mark Readed & Generate next"
+          label="read & get next"
           onPress={() => onMark(answers, written, true)}
           disabled={busy || !ready || digest.coverage_complete}
           full

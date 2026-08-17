@@ -48,7 +48,7 @@ export default function NotesScreen() {
             }`}
             activeOpacity={0.7}>
             <Text
-              className={`text-[11px] ${
+              className={`text-[13px] ${
                 kind === null ? 'text-primary font-medium' : 'text-ink-soft'
               }`}>
               All
@@ -63,7 +63,7 @@ export default function NotesScreen() {
               }`}
               activeOpacity={0.7}>
               <Text
-                className={`text-[11px] ${
+                className={`text-[13px] ${
                   kind === k.kind ? 'text-primary font-medium' : 'text-ink-soft'
                 }`}>
                 {k.icon} {k.label}

@@ -583,7 +583,7 @@ export default function RagChatbotScreen() {
             left behind to go back to. See `@/navigation/apps`. */}
 
         {/* Documents */}
-        <Text className="mt-6 mb-2 text-[11px] font-semibold tracking-wide text-gray-400 uppercase">
+        <Text className="mt-6 mb-2 text-[12px] font-semibold tracking-wide text-gray-400 uppercase">
           Documents
         </Text>
         <TouchableOpacity
@@ -678,7 +678,7 @@ export default function RagChatbotScreen() {
         </View>
 
         {/* Recent Queries */}
-        <Text className="mt-6 mb-2 text-[11px] font-semibold tracking-wide text-gray-400 uppercase">
+        <Text className="mt-6 mb-2 text-[12px] font-semibold tracking-wide text-gray-400 uppercase">
           Recent Queries
         </Text>
         {chatsLoading ? (
@@ -804,7 +804,7 @@ export default function RagChatbotScreen() {
               <Text className="text-xl font-bold text-gray-900">RAG Query</Text>
               <View className="flex-row items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1">
                 <View className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                <Text className="text-[11px] font-semibold text-emerald-700">
+                <Text className="text-[12px] font-semibold text-emerald-700">
                   {streaming ? 'Streaming' : 'Ready'}
                 </Text>
               </View>
@@ -930,7 +930,7 @@ export default function RagChatbotScreen() {
               </Text>
             </View>
             {thinkingSeconds >= 6 && (
-              <Text className="mt-1 text-[11px] text-gray-400">
+              <Text className="mt-1 text-[13px] text-gray-400">
                 The first query warms up the model — this can take ~20s.
               </Text>
             )}
@@ -1025,7 +1025,7 @@ export default function RagChatbotScreen() {
                 <Text numberOfLines={1} className="text-sm font-bold text-gray-900">
                   {activeSource?.source}
                 </Text>
-                <Text className="text-[11px] text-gray-400">
+                <Text className="text-[13px] text-gray-400">
                   {activeSource?.page_number != null
                     ? `Page ${activeSource.page_number}`
                     : 'Source passage'}

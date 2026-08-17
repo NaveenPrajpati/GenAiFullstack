@@ -118,12 +118,16 @@ function groupByDay(digests: Digest[]) {
 function ArchiveCard({
   digest,
   showRoadmap,
+  roadmapActive,
   startOpen = false,
   onMark,
   onAnswer,
 }: {
   digest: Digest;
   showRoadmap: boolean;
+  /** Whether this digest's roadmap is still running. Only an active roadmap's
+   *  digests reach the screen that sits checks — see the action row below. */
+  roadmapActive: boolean;
   /** Open on arrival. Set when the screen was deep-linked to one topic: that's
    *  someone sent here to read something specific, not to scan the archive. */
   startOpen?: boolean;
@@ -198,8 +202,17 @@ function ArchiveCard({
         ) : (digest.quiz?.length ?? 0) > 0 ? (
           // Acknowledging this one means passing its recall check, and the check
           // isn't rendered here. "Got it" could only ever be refused, so it says
-          // what to do instead.
-          <Button label="Answer the check" size="sm" variant="secondary" onPress={onAnswer} />
+          // what to do instead — but only while there is somewhere to send them.
+          // Today lists unread digests from ACTIVE roadmaps only, so on a parked
+          // one this button led to a screen that doesn't contain this digest:
+          // a dead end that looked like the tap hadn't registered.
+          roadmapActive ? (
+            <Button label="Answer the check" size="sm" variant="secondary" onPress={onAnswer} />
+          ) : (
+            <Text className="text-ink-faint shrink text-right text-[13px]">
+              Resume this roadmap to answer its check
+            </Text>
+          )
         ) : (
           <Button label="Got it" size="sm" onPress={onMark} />
         )}
@@ -258,6 +271,14 @@ export default function DigestsScreen() {
     // visible cause.
     setTopicId(null);
   };
+
+  // Which roadmaps are still running. The archive spans every status, but only
+  // an active roadmap's unread digests appear on Today — so this is what decides
+  // whether "Answer the check" has anywhere to go.
+  const activeRoadmapIds = useMemo(
+    () => new Set(roadmaps.filter((r: Roadmap) => r.status === 'active').map((r) => r._id)),
+    [roadmaps]
+  );
 
   const filtered = !!roadmapId || !!topicId;
   const days = groupByDay(digests);
@@ -346,6 +367,7 @@ export default function DigestsScreen() {
                     key={digest._id}
                     digest={digest}
                     showRoadmap={!roadmapId}
+                    roadmapActive={activeRoadmapIds.has(digest.roadmapId)}
                     startOpen={!!topicId && digest.status !== 'marked'}
                     onMark={() => {
                       setMarkError('');

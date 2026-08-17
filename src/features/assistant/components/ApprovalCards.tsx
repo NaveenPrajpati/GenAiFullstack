@@ -108,7 +108,7 @@ function RoadmapCard({ proposal, ...actions }: { proposal: RoadmapProposal } & A
             <View className="flex-1">
               <Text className="text-sm font-medium text-gray-800">{t.title}</Text>
               {!!t.estimated_hours && (
-                <Text className="text-[11px] text-gray-400">~{t.estimated_hours}h</Text>
+                <Text className="text-[13px] text-gray-400">~{t.estimated_hours}h</Text>
               )}
             </View>
           </View>
@@ -184,14 +184,14 @@ function MealPlanCard({ proposal, ...actions }: { proposal: MealPlanProposal } &
               </Text>
               {ordered.map((slot, i) => (
                 <View key={i} className="mb-0.5 flex-row items-center gap-2">
-                  <Text className="w-16 text-[11px] text-gray-400 capitalize">
+                  <Text className="w-16 text-[13px] text-gray-400 capitalize">
                     {slot.meal_type}
                   </Text>
                   <Text className="flex-1 text-sm text-gray-800" numberOfLines={1}>
                     {slot.recipe_name}
                   </Text>
                   {slot.protein_g != null && (
-                    <Text className="text-[11px] text-emerald-600">{slot.protein_g}g</Text>
+                    <Text className="text-[13px] text-emerald-600">{slot.protein_g}g</Text>
                   )}
                 </View>
               ))}

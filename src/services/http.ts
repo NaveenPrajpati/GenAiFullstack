@@ -77,6 +77,36 @@ export async function authedFetch(input: string, init: RequestInit = {}): Promis
   return response;
 }
 
+/**
+ * True when a request never reached the server: no signal, DNS failure, a dead
+ * tunnel, a timeout.
+ *
+ * The distinction that matters to callers is *not* "did this fail" but "is it
+ * worth retrying later" — a 4xx is a considered refusal and replaying it will
+ * be refused again, while this is the server never having had an opinion. It's
+ * inferred from the error rather than read from a connectivity API on purpose:
+ * `@react-native-community/netinfo` is a native module and a rebuild, and the
+ * request that just failed is the most reliable connectivity check there is.
+ * The cost is that nothing here can *notice* the network coming back — callers
+ * that queue work have to drain on their own trigger. See `flushPendingMarks`.
+ */
+export function isOfflineError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const e = error as { response?: unknown; request?: unknown; code?: string; message?: string };
+  // The server answered at all — whatever went wrong, connectivity didn't.
+  if (e.response) return false;
+  return (
+    e.code === 'ERR_NETWORK' ||
+    e.code === 'ECONNABORTED' ||
+    e.code === 'ETIMEDOUT' ||
+    e.message === 'Network Error' ||
+    // A request that was sent and got nothing back. Last because it is the
+    // broadest: it also catches an aborted request, which is close enough —
+    // both mean "no answer, try again later".
+    !!e.request
+  );
+}
+
 export const http = axios.create({ baseURL: BASE_URL });
 
 http.interceptors.request.use(async (config) => {

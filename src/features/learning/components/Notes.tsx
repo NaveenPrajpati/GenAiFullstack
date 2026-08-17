@@ -65,7 +65,7 @@ export function NoteRow({
         // dark direction, which would put a white block inside a dark card. Mono
         // plus one step away from the card is what reads as code.
         <View className="bg-surface-alt rounded p-2.5">
-          <Text className="text-ink font-mono text-[11px] leading-relaxed">{note.body}</Text>
+          <Text className="text-ink font-mono text-[13px] leading-relaxed">{note.body}</Text>
         </View>
       ) : note.kind === 'link' ? (
         <TouchableOpacity
@@ -127,7 +127,7 @@ export function NoteComposer({
             }`}
             activeOpacity={0.7}>
             <Text
-              className={`text-[11px] ${
+              className={`text-[13px] ${
                 kind === k.kind ? 'text-primary font-medium' : 'text-ink-faint'
               }`}>
               {k.icon} {k.label}

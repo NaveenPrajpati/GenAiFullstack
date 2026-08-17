@@ -75,37 +75,46 @@ export function CheckpointCard({
           <Text className="text-ink mb-2 text-sm font-medium">
             {qIdx + 1}. {q.question}
           </Text>
-          {q.options.map((opt, optIdx) => {
-            const isSel = selected[qIdx] === optIdx;
-            return (
-              <TouchableOpacity
-                key={optIdx}
-                disabled={loading}
-                onPress={() =>
-                  setSelected((prev) => {
-                    const next = [...prev];
-                    next[qIdx] = optIdx;
-                    return next;
-                  })
-                }
-                className={`mb-1.5 flex-row items-center gap-2 rounded-lg border px-3 py-2 ${
-                  isSel ? 'border-warning bg-warning-soft' : 'border-line bg-surface-alt'
-                }`}
-                activeOpacity={0.7}>
-                <View
-                  className={`h-3.5 w-3.5 rounded-full border-2 ${
-                    isSel ? 'border-warning bg-warning' : 'border-line'
+          {/* Same markup and the same roles as the recall check in `DigestCard`.
+              They are one interaction wearing two visual treatments, and for a
+              while only one of them said so — these options announced
+              themselves as plain text with no indication that they were
+              selectable, let alone which was selected. */}
+          <View accessibilityRole="radiogroup" accessibilityLabel={q.question}>
+            {q.options.map((opt, optIdx) => {
+              const isSel = selected[qIdx] === optIdx;
+              return (
+                <TouchableOpacity
+                  key={optIdx}
+                  disabled={loading}
+                  onPress={() =>
+                    setSelected((prev) => {
+                      const next = [...prev];
+                      next[qIdx] = optIdx;
+                      return next;
+                    })
+                  }
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: isSel }}
+                  className={`mb-1.5 flex-row items-center gap-2 rounded-lg border px-3 py-2 ${
+                    isSel ? 'border-warning bg-warning-soft' : 'border-line bg-surface-alt'
                   }`}
-                />
-                <Text
-                  className={`flex-1 text-xs ${
-                    isSel ? 'text-warning font-medium' : 'text-ink-soft'
-                  }`}>
-                  {opt}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+                  activeOpacity={0.7}>
+                  <View
+                    className={`h-3.5 w-3.5 rounded-full border-2 ${
+                      isSel ? 'border-warning bg-warning' : 'border-line'
+                    }`}
+                  />
+                  <Text
+                    className={`flex-1 text-[13px] ${
+                      isSel ? 'text-warning font-medium' : 'text-ink-soft'
+                    }`}>
+                    {opt}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
       ))}
 
@@ -209,7 +218,7 @@ function CheckpointResult({
                 {r.outcome ? ` — ${r.outcome}` : r.correctOption ? ` — ${r.correctOption}` : ''}
               </Text>
               {!!r.hint && (
-                <Text className="text-ink-faint ml-3 text-[11px] leading-relaxed">{r.hint}</Text>
+                <Text className="text-ink-faint ml-3 text-[13px] leading-relaxed">{r.hint}</Text>
               )}
             </View>
           ))}

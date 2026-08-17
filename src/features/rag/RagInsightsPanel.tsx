@@ -95,7 +95,7 @@ export function RagInsightsPanel({
                       isCited ? 'bg-violet-600' : 'bg-violet-100'
                     }`}>
                     <Text
-                      className={`text-[11px] font-bold ${
+                      className={`text-[12px] font-bold ${
                         isCited ? 'text-white' : 'text-violet-700'
                       }`}>
                       {s.citation}

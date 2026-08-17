@@ -71,7 +71,7 @@ function TopicCard({ entry, onOpen }: { entry: MisconceptionReport; onOpen: () =
 
       {/* Says where this came from, so it doesn't read as the app having formed
           an opinion out of nowhere. */}
-      <Text className="text-ink-faint mt-2.5 text-[11px]">
+      <Text className="text-ink-faint mt-2.5 text-[13px]">
         From {entry.misses_analyzed} wrong answer{entry.misses_analyzed === 1 ? '' : 's'} across
         your checks on this topic
       </Text>

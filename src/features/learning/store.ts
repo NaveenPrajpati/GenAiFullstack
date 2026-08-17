@@ -8,6 +8,8 @@
  * All network access is delegated to `learningApi` — no axios/fetch here.
  */
 import { create } from 'zustand';
+import { isOfflineError } from '../../services/http';
+import { loadOutbox, loadSnapshot, saveOutbox, type QueuedMark } from './cache';
 import * as api from './learningApi';
 import { syncDigestWidget } from './widgets/sync';
 import type {
@@ -288,6 +290,18 @@ type LearningState = {
       generateNext?: boolean;
     }
   ) => Promise<DigestMarkResult>;
+  /** The offline half of `markDigest`: bank the mark locally and owe it to the
+   *  server. Rejects when the digest cannot be honoured without a connection —
+   *  see the implementation for which ones those are. Not called directly by
+   *  screens; `markDigest` routes here when the request never lands. */
+  queueMark: (
+    digestId: string,
+    opts: {
+      answers?: { question: number; answer: number }[];
+      written?: Record<number, string>;
+      generateNext?: boolean;
+    }
+  ) => Promise<DigestMarkResult>;
   /** Submit a Feynman explanation. Optional and never a gate — resolves to the
    *  judgement, rejects only when the call itself failed. */
   explainTopic: (
@@ -315,6 +329,30 @@ type LearningState = {
   fetchTriggers: () => Promise<void>;
   toggleDigest: () => Promise<void>;
   saveTriggerSettings: (body: { schedule_hour?: number; timezone?: string }) => Promise<void>;
+
+  /* ─── offline cache ─── */
+
+  /** False until the on-disk snapshot has been read. Screens use it to tell
+   *  "nothing to show" apart from "nothing loaded yet" — the two look identical
+   *  in an empty store and want opposite empty states. */
+  hydrated: boolean;
+  /** When the snapshot hydrated from disk was written, if there was one. Says
+   *  how old the cached content is; on its own it does *not* mean the screen is
+   *  stale — pair it with `reachedServer`. */
+  cacheSavedAt: string | null;
+  /** True once any request has come back this session. The two flags are
+   *  separate because either can happen first: a fetch can land before the disk
+   *  read finishes, and collapsing them into one field made a live-but-empty
+   *  Today indistinguishable from a cached one. */
+  reachedServer: boolean;
+  /** Marks made offline, oldest first, mirrored to disk on every change. */
+  pendingMarks: QueuedMark[];
+  /** Reads the snapshot and the outbox into the store. Safe to call more than
+   *  once; it never overwrites state a fetch has already filled. */
+  hydrateFromCache: () => Promise<void>;
+  /** Replays the outbox against the server, oldest first. Resolves to how many
+   *  marks are still queued afterwards. */
+  flushPendingMarks: () => Promise<number>;
 };
 
 /** The daily-digest trigger out of a `{ result: Trigger[] }` GET /triggers response. */
@@ -331,6 +369,11 @@ const deviceTimezone = (() => {
   }
 })();
 
+/** In-flight outbox drain, if any. Module-scoped rather than store state: it is
+ *  a concurrency guard, and putting it in the store would re-render every
+ *  subscriber twice per flush to say nothing they can use. */
+let flushing: Promise<number> | null = null;
+
 export const useLearningStore = create<LearningState>((set, get) => ({
   roadmaps: [],
   roadmapsLoading: false,
@@ -339,7 +382,7 @@ export const useLearningStore = create<LearningState>((set, get) => ({
     set({ roadmapsLoading: true, roadmapsError: '' });
     try {
       const data = await api.getRoadmaps();
-      set({ roadmaps: data.result ?? [] });
+      set({ roadmaps: data.result ?? [], reachedServer: true });
     } catch (e: any) {
       set({ roadmapsError: e?.response?.data?.detail ?? 'Failed to load roadmaps' });
     } finally {
@@ -374,12 +417,13 @@ export const useLearningStore = create<LearningState>((set, get) => ({
     get().optimisticUpdateTopic(roadmapId, topicId, status);
     try {
       await api.submitProgress({ roadmapId, topicId, status });
-      // The streak and "this week" are derived server-side from completed_at,
-      // so they only move once the write lands. Refreshing here is what makes
-      // those counters feel live — without it they sit at their old values
+      // "This week" is derived server-side from completed_at, so it only moves
+      // once the write lands. Refreshing here is what makes that counter feel
+      // live — without it it sits at its old value
       // until the learner happens to return to the landing screen, which reads
-      // as though the tracker isn't recording anything. Not awaited: the tick
-      // should feel instant.
+      // as though the tracker isn't recording anything. (The streak comes from
+      // marked digests, not from this.) Not awaited: the tick should feel
+      // instant.
       get().fetchStats();
     } catch {
       if (previous) {
@@ -442,7 +486,7 @@ export const useLearningStore = create<LearningState>((set, get) => ({
   fetchStats: async () => {
     try {
       const data = await api.getStats();
-      set({ stats: data.result ?? null });
+      set({ stats: data.result ?? null, reachedServer: true });
     } catch {
       // The summary strip is decorative — a failure here must not take the
       // roadmap list down with it.
@@ -469,7 +513,7 @@ export const useLearningStore = create<LearningState>((set, get) => ({
   fetchReviews: async () => {
     try {
       const data = await api.getReviews();
-      set({ reviews: data.result ?? [] });
+      set({ reviews: data.result ?? [], reachedServer: true });
     } catch {
       // Surfacing reviews is additive; never let it break the screen.
     }
@@ -903,7 +947,7 @@ export const useLearningStore = create<LearningState>((set, get) => ({
     set({ digestsLoading: true, digestsError: '' });
     try {
       const data = await api.getDigests(params);
-      set({ digests: data.result ?? [] });
+      set({ digests: data.result ?? [], reachedServer: true });
     } catch (e: any) {
       // Every filter tap is a fetch now, so a failure has to land somewhere the
       // screen can show it rather than as an unhandled rejection.
@@ -917,7 +961,7 @@ export const useLearningStore = create<LearningState>((set, get) => ({
   fetchUnreadDigests: async () => {
     try {
       const data = await api.getDigests({ status: 'unread', active_only: true, limit: 50 });
-      set({ unreadDigests: data.result ?? [] });
+      set({ unreadDigests: data.result ?? [], reachedServer: true });
       syncDigestWidget(get().unreadDigests);
     } catch {
       // The catch-up prompt is additive; never let it break the screen.
@@ -927,7 +971,7 @@ export const useLearningStore = create<LearningState>((set, get) => ({
   fetchFocus: async () => {
     try {
       const data = await api.getFocus();
-      set({ focus: data.result ?? null });
+      set({ focus: data.result ?? null, reachedServer: true });
     } catch {
       // The home screen still renders the queue without it.
     }
@@ -937,7 +981,8 @@ export const useLearningStore = create<LearningState>((set, get) => ({
   markDigest: async (digestId, opts = {}) => {
     // No optimistic removal here: a digest carrying a recall check can be
     // rejected, and yanking it out of the queue before the server accepts it
-    // would flash it away and back again.
+    // would flash it away and back again. (The offline path below *does* remove
+    // it optimistically — see the note there for why that case is different.)
     try {
       const data = await api.markDigest(digestId, {
         answers: opts.answers,
@@ -959,8 +1004,15 @@ export const useLearningStore = create<LearningState>((set, get) => ({
         ),
       }));
       syncDigestWidget(get().unreadDigests);
+      // Acknowledging a digest is what the streak counts, so this is the moment
+      // it moves. Without the refresh the 🔥 tile keeps yesterday's number until
+      // the learner leaves the screen and comes back — on the one action the
+      // counter exists to reward. Not awaited, as in submitProgress: the tick
+      // should feel instant.
+      get().fetchStats();
       return result;
     } catch (e: any) {
+      if (isOfflineError(e)) return await get().queueMark(digestId, opts);
       // 422 means the recall check was wrong, and the body carries the grading —
       // plus, once they've failed the same check enough times, the news that the
       // agent is re-explaining the material rather than asking them to re-read it.
@@ -975,6 +1027,72 @@ export const useLearningStore = create<LearningState>((set, get) => ({
         (typeof detail === 'string' ? detail : detail?.message) ?? 'Could not mark that digest.'
       );
     }
+  },
+
+  queueMark: async (digestId, opts) => {
+    const state = get();
+    const digest =
+      state.unreadDigests.find((d) => d._id === digestId) ??
+      state.digests.find((d) => d._id === digestId);
+
+    // A recall check is graded server-side, and there is no honest way to bank
+    // one offline: accepting it would tell the learner they had passed a check
+    // that might fail on replay, and moving the digest out of the queue on that
+    // basis is exactly the flash-away-and-back the online path avoids. Refusing
+    // is the smaller cost — the tips are still readable, only the acknowledgement
+    // has to wait.
+    if (digest && digest.quizId && (digest.quiz?.length ?? 0) > 0) {
+      throw new Error("You're offline — this recall check needs a connection to grade.");
+    }
+    // Nothing known about it locally means nothing to reconcile against later,
+    // and a queue entry that cannot name its topic cannot produce a result the
+    // caller can use.
+    if (!digest) throw new Error("You're offline — that digest can't be marked right now.");
+
+    const queued: QueuedMark = {
+      digestId,
+      topicId: digest.topicId,
+      roadmapId: digest.roadmapId,
+      answers: opts.answers,
+      written: opts.written,
+      generateNext: opts.generateNext,
+      queuedAt: new Date().toISOString(),
+    };
+    const pendingMarks = [...state.pendingMarks.filter((m) => m.digestId !== digestId), queued];
+
+    // Disk first, and awaited. Everything below tells the learner the digest is
+    // done; if the promise the app is making on the server's behalf cannot be
+    // written down, that has to surface before the UI clears the card.
+    try {
+      await saveOutbox(pendingMarks);
+    } catch {
+      throw new Error("You're offline and this couldn't be saved — try again in a moment.");
+    }
+
+    // Now the optimistic removal the online path deliberately avoids. It is safe
+    // here precisely because of the guard above: with no check to fail, the
+    // server has no grounds to refuse this on replay, so the queue will not
+    // spring back.
+    set((s) => ({
+      pendingMarks,
+      unreadDigests: s.unreadDigests.filter((d) => d._id !== digestId),
+      digests: s.digests.map((d) => (d._id === digestId ? { ...d, status: 'marked' as const } : d)),
+    }));
+    syncDigestWidget(get().unreadDigests);
+
+    // Shaped like the server's reply so callers need no second code path, but
+    // `queued` marks every derived field as a placeholder — see `DigestMarkResult`.
+    return {
+      digestId,
+      topicId: digest.topicId,
+      roadmapId: digest.roadmapId,
+      quiz_result: null,
+      generated: null,
+      next: null,
+      remaining: get().unreadDigests.length,
+      coverage_complete: false,
+      queued: true,
+    };
   },
 
   generatingDigest: false,
@@ -1063,6 +1181,103 @@ export const useLearningStore = create<LearningState>((set, get) => ({
       });
     } finally {
       set({ digestSaving: false });
+    }
+  },
+
+  /* ─── offline cache ─── */
+
+  hydrated: false,
+  cacheSavedAt: null,
+  reachedServer: false,
+  pendingMarks: [],
+
+  hydrateFromCache: async () => {
+    const [snapshot, outbox] = await Promise.all([loadSnapshot(), loadOutbox()]);
+
+    set((s) => {
+      // A fetch can beat the disk read — AsyncStorage is a bridge round trip and
+      // the screens fire their requests on mount. Whatever a response has
+      // already put in the store is newer than anything here by definition, so
+      // each slice is filled only where it is still untouched.
+      const stale = snapshot
+        ? {
+            roadmaps: s.roadmaps.length ? s.roadmaps : snapshot.roadmaps,
+            unreadDigests: s.unreadDigests.length ? s.unreadDigests : snapshot.unreadDigests,
+            digests: s.digests.length ? s.digests : snapshot.digests,
+            focus: s.focus ?? snapshot.focus,
+            stats: s.stats ?? snapshot.stats,
+            reviews: s.reviews.length ? s.reviews : snapshot.reviews,
+          }
+        : {};
+      return {
+        ...stale,
+        pendingMarks: outbox,
+        hydrated: true,
+        // Records the age of what came off disk, nothing more. Whether that is
+        // what the learner is actually looking at is `reachedServer`'s job.
+        cacheSavedAt: snapshot?.savedAt ?? null,
+      };
+    });
+
+    // The widget reads its own persisted payload, but a cold start with digests
+    // on disk and no network would otherwise leave it on "not synced yet" while
+    // the app itself is showing the queue.
+    if (get().unreadDigests.length > 0) syncDigestWidget(get().unreadDigests);
+  },
+
+  flushPendingMarks: async () => {
+    // One drain at a time. Hydration, app-foreground and a successful fetch can
+    // all ask for this within the same tick, and replaying a mark twice risks
+    // the second attempt being refused for reasons the first one caused.
+    if (flushing) return flushing;
+    if (get().pendingMarks.length === 0) return 0;
+
+    flushing = (async () => {
+      const remaining = [...get().pendingMarks];
+      let sent = 0;
+
+      while (remaining.length > 0) {
+        const mark = remaining[0];
+        try {
+          await api.markDigest(mark.digestId, {
+            answers: mark.answers,
+            written: mark.written,
+            generate_next: mark.generateNext,
+          });
+          sent += 1;
+        } catch (e) {
+          // Still no network: stop, keep the whole queue, try again next time.
+          if (isOfflineError(e)) break;
+          // The server answered and refused. It will refuse the same request
+          // again — most often because the digest is already marked, which is
+          // this queue's own work arriving twice. Dropping it is what keeps a
+          // permanently-rejected entry from blocking everything behind it.
+        }
+        remaining.shift();
+      }
+
+      set({ pendingMarks: remaining });
+      try {
+        await saveOutbox(remaining);
+      } catch {
+        // In-memory state is already correct; the next queue or flush rewrites it.
+      }
+
+      if (sent > 0) {
+        // Replay changed the backlog, the streak and possibly the topic's state.
+        // Refetching is how the local guesses made offline get reconciled with
+        // what the server actually did with them.
+        await get().fetchUnreadDigests();
+        get().fetchFocus();
+        get().fetchStats();
+      }
+      return remaining.length;
+    })();
+
+    try {
+      return await flushing;
+    } finally {
+      flushing = null;
     }
   },
 }));

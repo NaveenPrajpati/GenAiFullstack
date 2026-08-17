@@ -91,7 +91,7 @@ export function RagPipelineCard({ pipeline, live }: { pipeline: PipelineState; l
         {LEGEND.map((l) => (
           <View key={l.label} className="flex-row items-center gap-1.5">
             <View className={`h-2 w-2 rounded-full ${l.dot}`} />
-            <Text className="text-[11px] text-gray-500">{l.label}</Text>
+            <Text className="text-[13px] text-gray-500">{l.label}</Text>
           </View>
         ))}
       </View>

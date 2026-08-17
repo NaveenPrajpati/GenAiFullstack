@@ -35,17 +35,25 @@ export function Badge({
     <View
       className={`${t.bg} ${square ? 'rounded-md' : 'rounded-full'} flex-row items-center gap-1.5 self-start px-2.5 py-1`}>
       {dot && <View className={`h-1.5 w-1.5 rounded-full ${t.dot}`} />}
-      <Text className={`text-[11px] font-bold ${t.text}`} numberOfLines={1}>
+      <Text className={`text-[12px] font-bold ${t.text}`} numberOfLines={1}>
         {label}
       </Text>
     </View>
   );
 }
 
-/** The 11/700 uppercase caption that opens a section ("TODAY'S DIGEST"). */
+/**
+ * The 12/700 uppercase caption that opens a section ("TODAY'S DIGEST").
+ *
+ * 12 rather than the 13 the body copy uses, and rather than the 11 this and the
+ * badge above it started at: these two are the only type in the app allowed
+ * under 13, because a caption and a one-word tag are read as landmarks rather
+ * than as prose. Anything carrying a fact — a count, a duration, a status —
+ * belongs at 13 even when it looks like a caption.
+ */
 export function SectionLabel({ children }: { children: string }) {
   return (
-    <Text className="text-ink-faint mb-2 text-[11px] font-bold tracking-wider uppercase">
+    <Text className="text-ink-faint mb-2 text-[12px] font-bold tracking-wider uppercase">
       {children}
     </Text>
   );

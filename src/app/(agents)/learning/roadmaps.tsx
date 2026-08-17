@@ -204,7 +204,7 @@ function ReviewsCard({
             <Text className="text-ink text-[15px] font-medium" numberOfLines={1}>
               {r.title}
             </Text>
-            <Text className="text-ink-faint text-[11px]" numberOfLines={1}>
+            <Text className="text-ink-faint text-[13px]" numberOfLines={1}>
               {r.roadmapTitle}
             </Text>
           </View>
@@ -212,7 +212,7 @@ function ReviewsCard({
         </TouchableOpacity>
       ))}
       {reviews.length > 3 && (
-        <Text className="text-ink-soft mt-1 text-[11px]">+{reviews.length - 3} more waiting</Text>
+        <Text className="text-ink-soft mt-1 text-[13px]">+{reviews.length - 3} more waiting</Text>
       )}
     </View>
   );

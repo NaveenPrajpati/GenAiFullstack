@@ -53,7 +53,7 @@ function ResultCard({
     tone === 'success' ? 'text-success' : tone === 'warning' ? 'text-warning' : 'text-primary';
   return (
     <View className="border-line bg-surface rounded-2xl border p-4">
-      <Text className={`mb-2 text-[11px] font-bold tracking-wider uppercase ${accent}`}>
+      <Text className={`mb-2 text-[12px] font-bold tracking-wider uppercase ${accent}`}>
         {label}
       </Text>
       {children}
@@ -84,7 +84,7 @@ function ResourcesCard({ suggestions }: { suggestions: Resource[] }) {
             {r.title}
           </Text>
           {!!r.resource_type && r.resource_type !== 'other' && (
-            <Text className="text-ink-faint mb-2 text-[11px] capitalize">{r.resource_type}</Text>
+            <Text className="text-ink-faint mb-2 text-[13px] capitalize">{r.resource_type}</Text>
           )}
         </TouchableOpacity>
       ))}
@@ -193,13 +193,17 @@ function OnboardingCard({
   );
 }
 
+/** The way into the practice screen. `primary`, not `warning`: warning is the
+ *  checkpoint's colour throughout the app, and dressing a practice set in it
+ *  says this is the one that decides whether a topic is finished. It isn't. */
 function QuizLaunchCard({ onStart }: { onStart: () => void }) {
   return (
-    <ResultCard label="Quiz ready" tone="warning">
+    <ResultCard label="Practice ready">
       <Text className="text-ink-soft mb-3 text-[15px]">
-        A quiz has been generated. Tap below to start.
+        Questions on what you asked about. It won&apos;t complete a topic — only a checkpoint does
+        that.
       </Text>
-      <Button label="Start quiz" onPress={onStart} />
+      <Button label="Start practice" onPress={onStart} />
     </ResultCard>
   );
 }
@@ -232,12 +236,12 @@ function ProposalCard({
       <View className="mb-3 flex-row flex-wrap gap-1.5">
         {(p?.stages ?? []).map((s) => (
           <View key={s.order} className="bg-surface-alt rounded-full px-2.5 py-1">
-            <Text className="text-ink-soft text-[11px] font-bold">{s.title}</Text>
+            <Text className="text-ink-soft text-[13px] font-bold">{s.title}</Text>
           </View>
         ))}
         {!!p?.total_estimated_hours && (
           <View className="bg-primary-soft rounded-full px-2.5 py-1">
-            <Text className="text-primary text-[11px] font-bold">
+            <Text className="text-primary text-[13px] font-bold">
               {p.total_estimated_hours}h total
             </Text>
           </View>
@@ -246,7 +250,7 @@ function ProposalCard({
 
       {(p?.topics ?? []).length > 0 && (
         <View className="bg-surface-alt mb-4 rounded-xl p-3">
-          <Text className="text-ink-faint mb-2 text-[11px] font-bold tracking-wider uppercase">
+          <Text className="text-ink-faint mb-2 text-[12px] font-bold tracking-wider uppercase">
             {p.topics.length} topics
           </Text>
           {p.topics.map((t, i) => {
@@ -428,7 +432,7 @@ function TopicActions({
 
   return (
     <View className="border-line border-t px-4 py-3">
-      <Text className="text-ink-faint mb-2 text-[11px]" numberOfLines={1}>
+      <Text className="text-ink-faint mb-2 text-[13px]" numberOfLines={1}>
         Selected: <Text className="text-ink font-bold">{topic.title}</Text>
       </Text>
       <View className="flex-row gap-2">

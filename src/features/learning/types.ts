@@ -168,6 +168,11 @@ export type DigestMarkResult = {
   revision_cleared?: boolean;
   topicId: string;
   roadmapId: string;
+  /** Client-set, never sent by the server: the mark was made offline and is
+   *  waiting in the outbox. Everything derived from the server's reply —
+   *  `generated`, `quiz_result`, `remaining` — is a placeholder on this one, so
+   *  callers must check it before reading them. */
+  queued?: boolean;
 };
 
 /** Why a recall check was refused, and whether the agent is re-teaching. */
@@ -188,18 +193,28 @@ export type LearningAvailability = {
   deadline?: string;
 };
 
+/** What a learner can ask to be taught *with*. Deliberately not `ResourceType`:
+ *  the profile schema takes a narrower set than a topic's resources do — it has
+ *  `interactive`, and no `course`/`exercise`/`other`. */
+export type PreferredResourceType =
+  'video' | 'article' | 'documentation' | 'interactive' | 'project' | 'book';
+
+export type ExplanationStyle =
+  'concise' | 'step_by_step' | 'examples_first' | 'visual' | 'socratic';
+
+export type QuizDifficulty = 'easy' | 'adaptive' | 'challenging';
+
 export type Memory = {
   skill_level?: Difficulty;
-  preferred_resource_types?: string[];
-  preferred_explanation_style?:
-    'concise' | 'step_by_step' | 'examples_first' | 'visual' | 'socratic';
+  preferred_resource_types?: PreferredResourceType[];
+  preferred_explanation_style?: ExplanationStyle;
   preferred_language?: string;
   goals?: string[];
   availability?: LearningAvailability;
   known_topics?: string[];
   weak_topics?: string[];
   wants_hints_before_answers?: boolean;
-  preferred_quiz_difficulty?: 'easy' | 'adaptive' | 'challenging';
+  preferred_quiz_difficulty?: QuizDifficulty;
   /** Set by the server once onboarding has run, including when it was skipped. */
   onboarded?: boolean;
 };

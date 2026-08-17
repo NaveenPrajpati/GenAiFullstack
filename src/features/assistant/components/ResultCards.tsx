@@ -147,7 +147,7 @@ function AssistantCard({ data }: { data: AssistantSummary }) {
             {t.title}
           </Text>
           {!!t.priority && (
-            <Text className="text-[11px] text-gray-400 capitalize">{t.priority}</Text>
+            <Text className="text-[13px] text-gray-400 capitalize">{t.priority}</Text>
           )}
         </View>
       ))}

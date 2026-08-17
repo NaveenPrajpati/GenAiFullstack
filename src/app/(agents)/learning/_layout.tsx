@@ -1,12 +1,17 @@
 import ChatBot from '@/components/layout/ChatBot';
 import { SectionSidebar, useWideNav } from '@/components/ui/SectionNav';
 import { useColors } from '@/components/ui/theme';
+import { useOfflineCache } from '@/features/learning/useOfflineCache';
 import { Stack, usePathname } from 'expo-router';
 import { View } from 'react-native';
 
 export default function LearningLayout() {
   const colors = useColors();
   const wide = useWideNav();
+  // Mounted here rather than per screen: the cache is read once at startup and
+  // written for the whole section, and this layout outlives navigation between
+  // the screens that share it.
+  useOfflineCache();
   // The tutor follows the learner across the section, so it's mounted once here
   // rather than per screen — that also keeps one chat thread alive as they
   // navigate. Settings is the exception: it's a form, with nothing to ask about.

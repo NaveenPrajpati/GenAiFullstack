@@ -29,6 +29,7 @@ export function Button({
   disabled = false,
   loadingLabel,
   full = false,
+  accessibilityHint,
 }: {
   label: string;
   onPress: () => void;
@@ -40,6 +41,9 @@ export function Button({
   loadingLabel?: string;
   /** Stretch to the width of the row — for the one action a card is about. */
   full?: boolean;
+  /** Announced after the label, for a button whose wording says what it *is*
+   *  rather than what tapping it will do. */
+  accessibilityHint?: string;
 }) {
   const v = VARIANT[variant];
   const s = SIZE[size];
@@ -51,6 +55,7 @@ export function Button({
       disabled={disabled || loading}
       activeOpacity={0.85}
       accessibilityRole="button"
+      accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: disabled || loading, busy: loading }}
       className={`flex-row items-center justify-center gap-2 ${v.box} ${s.box} ${
         full ? 'flex-1' : 'self-start'

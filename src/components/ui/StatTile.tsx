@@ -23,7 +23,7 @@ export function StatTile({ value, label, tone = 'default' }: Stat) {
       <Text className={`text-[17px] font-extrabold ${VALUE_TONE[tone]}`} numberOfLines={1}>
         {value}
       </Text>
-      <Text className="text-ink-faint mt-0.5 text-[11px]" numberOfLines={1}>
+      <Text className="text-ink-faint mt-0.5 text-[13px]" numberOfLines={1}>
         {label}
       </Text>
     </View>

@@ -99,14 +99,14 @@ export function FeynmanCard({
       />
 
       <View className="mt-2 flex-row items-center justify-between">
-        <Text className={`text-[11px] ${enough ? 'text-success' : 'text-ink-faint'}`}>
+        <Text className={`text-[13px] ${enough ? 'text-success' : 'text-ink-faint'}`}>
           {words === 0
             ? `about ${minWords} words is plenty`
             : enough
               ? `${words} words — ready`
               : `${words} / ${minWords} words`}
         </Text>
-        {!!error && <Text className="text-danger flex-1 pl-3 text-[11px]">{error}</Text>}
+        {!!error && <Text className="text-danger flex-1 pl-3 text-[13px]">{error}</Text>}
       </View>
 
       <View className="mt-3 flex-row gap-2">
