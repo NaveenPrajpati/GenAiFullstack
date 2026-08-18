@@ -139,6 +139,19 @@ export async function getFocus() {
 }
 
 /**
+ * GET /briefing — what the assistant says on arrival: the one thing that matters
+ * right now, why, and the actions to do it.
+ *
+ * Cheap to call on every focus. The server generates it once per *situation* and
+ * replays that until the learner's position actually changes, so repeated opens
+ * cost a cache read rather than an LLM call.
+ */
+export async function getBriefing() {
+  const res = await http.get(`/learning/briefing`);
+  return res.data;
+}
+
+/**
  * POST /progress — set a topic's progress.
  *
  * `status` is the full vocabulary (in_progress, needs_review, skipped, …).

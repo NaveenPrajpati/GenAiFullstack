@@ -330,7 +330,15 @@ function CheckpointBlockedCard({
 }
 
 export default function RoadmapDetail() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // `focusTopic` and `action` are how the briefing hands a specific topic over:
+  // it recommends a checkpoint, and the learner should land on that topic with
+  // it open rather than on a roadmap with it somewhere in the list.
+  const {
+    id,
+    // Not `focusTopic` — that name is taken by the local helper below.
+    focusTopic: routeTopicId,
+    action: routeAction,
+  } = useLocalSearchParams<{ id: string; focusTopic?: string; action?: string }>();
   const router = useRouter();
   const {
     roadmaps,
@@ -405,6 +413,43 @@ export default function RoadmapDetail() {
   // A topic selection belongs to the roadmap it was made on, so drop it when
   // this screen goes away or the learner opens a different roadmap.
   useEffect(() => () => setSelectedTopic(null), [id]);
+
+  /**
+   * Act on a topic handed over in the route — the briefing recommending a
+   * checkpoint, or a review that has come due.
+   *
+   * Genuinely an effect rather than state derived during render: it responds to
+   * having been navigated to, it calls a store action, and the scroll cannot
+   * happen until the rows have laid out and reported their offsets. Guarded by a
+   * ref so a background refetch of the roadmap doesn't re-open a checkpoint the
+   * learner has since closed.
+   */
+  const handledRoute = useRef<string | null>(null);
+  useEffect(() => {
+    if (!roadmap || !routeTopicId || handledRoute.current === routeTopicId) return;
+    const target = roadmap.topics.find((t) => t.id === routeTopicId);
+    if (!target) return;
+    handledRoute.current = routeTopicId;
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- see above
+    setExpanded((prev) => new Set(prev).add(target.id));
+    setSelectedTopic({ roadmapId: roadmap._id, id: target.id, title: target.title });
+
+    // The server refuses an attempt while revision is owed, so send them to the
+    // revision instead of opening something that would be turned away — the same
+    // rule `handleToggle` follows.
+    if (routeAction === 'checkpoint' && !revisionOwed(target)) {
+      startCheckpoint(target.id, roadmap._id);
+    }
+
+    // Offsets are recorded by each row's onLayout, which has not necessarily run
+    // on the frame this mounts. One tick later it has.
+    const t = setTimeout(() => {
+      const y = topicOffsets.current[target.id];
+      if (y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(y - 80, 0), animated: true });
+    }, 250);
+    return () => clearTimeout(t);
+  }, [roadmap, routeTopicId, routeAction]);
 
   useEffect(() => {
     if (!justFinished) return;

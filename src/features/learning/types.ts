@@ -370,6 +370,49 @@ export type LearningFocus = {
   blocked_reason: BlockedReason | null;
 };
 
+/**
+ * One thing the briefing offers to do, as a typed instruction rather than a
+ * route. The server picks the `kind` from a fixed set and validates it against
+ * the learner's actual situation before sending, so a briefing can't offer a
+ * checkpoint that would be refused; this client owns where each kind goes.
+ */
+export type BriefingActionKind =
+  | 'open_roadmap'
+  | 'read_digests'
+  | 'generate_digest'
+  | 'open_checkpoint'
+  | 'open_reviews'
+  | 'create_roadmap'
+  /** Put a question to the tutor on the learner's behalf. */
+  | 'ask';
+
+export type BriefingAction = {
+  kind: BriefingActionKind;
+  label: string;
+  roadmapId?: string;
+  topicId?: string;
+  /** `ask` only — the message to send. */
+  prompt?: string;
+};
+
+/**
+ * What the assistant says on arrival, before being asked.
+ *
+ * The screen already lists what's outstanding; this is the judgement over that
+ * list — which one thing to do first and why. It replaces the fixed copy this
+ * client used to hold in a lookup keyed on `blocked_reason`, which could state a
+ * situation but never weigh two of them against each other.
+ *
+ * Generated server-side once per *situation*, so it's cheap to ask for on every
+ * screen focus. It always answers: a model failure falls back to deterministic
+ * copy rather than to nothing.
+ */
+export type Briefing = {
+  headline: string;
+  detail: string;
+  actions: BriefingAction[];
+};
+
 /** When the learner's stated pace gets them to the end of a roadmap. */
 export type CompletionForecast = {
   remaining_minutes: number;
@@ -568,8 +611,22 @@ export type ChatResultData =
   | { intent: 'explain'; topic_explaination: string }
   | { intent: 'quiz'; quiz: QuizQuestion[]; quizId: string }
   | { intent: 'submit_quiz'; quiz_result: QuizResult }
+  // The tutor did something rather than describing where the button is. `text`
+  // is its own account of what happened; `actions_taken` names the tools that
+  // actually ran, which is what decides the screens worth re-reading — a bare
+  // "something changed" flag would mean refetching the whole section every turn.
+  | { intent: 'take_action'; text: string; actions_taken: string[] }
   | { intent: 'find_resources'; suggestions: Resource[] }
-  | { intent: 'query_roadmap'; next_topic: string; progress: RoadmapProgress }
+  // `guidance` is the coached sentence beside the numbers: which of it to do
+  // first, and why. Optional because it's written by a model over the learner's
+  // situation while `progress` is computed and exact — the card renders without
+  // it exactly as it did before, rather than losing the answer to a failed call.
+  | {
+      intent: 'query_roadmap';
+      next_topic: string;
+      progress: RoadmapProgress;
+      guidance?: string;
+    }
   | { intent: 'update_progress'; log_status: string; roadmap: Roadmap }
   // `decision` is set once the user answers, which switches the card to a
   // confirmation. Without it the buttons stay live and the same roadmap can be

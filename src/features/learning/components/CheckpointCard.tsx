@@ -6,7 +6,7 @@
  * a detour away from it. The same component handles a first attempt and a
  * spaced-repetition review — only the framing changes.
  */
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, Text, TouchableOpacity, View } from 'react-native';
 
 import { useColors } from '@/components/ui/theme';
@@ -29,14 +29,26 @@ export function CheckpointCard({
   onRetry: () => void;
   onClose: () => void;
 }) {
-  const [selected, setSelected] = useState<(number | null)[]>([]);
+  /** Picks by question index. A map rather than an array sized to the questions,
+   *  so a new set needs nothing initialised before it can be answered. */
+  const [selected, setSelected] = useState<Record<number, number>>({});
+  const [pickedFor, setPickedFor] = useState<string | null>(null);
   const colors = useColors();
 
-  useEffect(() => {
-    setSelected(new Array(checkpoint.questions.length).fill(null));
-  }, [checkpoint.quizId]);
+  // Clearing the picks for a new set is state adjusted during render rather than
+  // in an effect. An effect runs *after* the paint, so a regenerated attempt
+  // showed the previous set's selections against the new questions for a frame
+  // before wiping them — and on a retry those two sets look alike enough that
+  // the flash reads as the old answers having been kept.
+  if (checkpoint.quizId !== pickedFor) {
+    setPickedFor(checkpoint.quizId);
+    setSelected({});
+  }
 
-  const answered = selected.filter((s) => s !== null).length;
+  const answers = checkpoint.questions
+    .map((_, i) => (selected[i] !== undefined ? { question: i, answer: selected[i] } : null))
+    .filter((x): x is { question: number; answer: number } => x !== null);
+  const answered = answers.length;
   const allAnswered = answered === checkpoint.questions.length;
 
   if (outcome) return <CheckpointResult outcome={outcome} onRetry={onRetry} onClose={onClose} />;
@@ -87,13 +99,7 @@ export function CheckpointCard({
                 <TouchableOpacity
                   key={optIdx}
                   disabled={loading}
-                  onPress={() =>
-                    setSelected((prev) => {
-                      const next = [...prev];
-                      next[qIdx] = optIdx;
-                      return next;
-                    })
-                  }
+                  onPress={() => setSelected((prev) => ({ ...prev, [qIdx]: optIdx }))}
                   accessibilityRole="radio"
                   accessibilityState={{ checked: isSel }}
                   className={`mb-1.5 flex-row items-center gap-2 rounded-lg border px-3 py-2 ${
@@ -122,13 +128,7 @@ export function CheckpointCard({
 
       <View className="flex-row gap-2">
         <TouchableOpacity
-          onPress={() =>
-            onSubmit(
-              selected
-                .map((a, i) => (a !== null ? { question: i, answer: a } : null))
-                .filter((x): x is { question: number; answer: number } => x !== null)
-            )
-          }
+          onPress={() => onSubmit(answers)}
           disabled={!allAnswered || loading}
           className={`flex-1 items-center rounded-lg py-2.5 ${
             allAnswered && !loading ? 'bg-warning' : 'bg-surface-alt'

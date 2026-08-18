@@ -3,6 +3,7 @@ import { ProgressBar } from '@/components/ui/ProgressBar';
 import { useWideNav } from '@/components/ui/SectionNav';
 import { useColors } from '@/components/ui/theme';
 import { useAuth } from '@/context/AuthContext';
+import { BriefingActions, useBriefingAction } from '@/features/learning/components/Briefing';
 import { ChatMarkdown } from '@/features/learning/components/Markdown';
 import { useLearningStore } from '@/features/learning/store';
 import type {
@@ -64,6 +65,26 @@ function ResultCard({
 function ExplainCard({ text }: { text: string }) {
   return (
     <ResultCard label="Explanation">
+      <ChatMarkdown markdown={text} />
+    </ResultCard>
+  );
+}
+
+/**
+ * The tutor reporting something it did, rather than something it knows.
+ *
+ * Given its own treatment because the difference matters: an explanation is
+ * yours to act on, and this has already happened. A turn that changed the
+ * learner's roadmap reading like every other paragraph of prose is how someone
+ * ends up not noticing that their topic moved.
+ *
+ * `actions_taken` is empty when the tutor declined — it explains why instead, and
+ * that is a normal outcome rather than a failure, so it loses the tick and the
+ * success tone but keeps the frame.
+ */
+function ActionCard({ text, changed }: { text: string; changed: boolean }) {
+  return (
+    <ResultCard label={changed ? '✓ Done' : 'Not done'} tone={changed ? 'success' : 'warning'}>
       <ChatMarkdown markdown={text} />
     </ResultCard>
   );
@@ -337,6 +358,8 @@ function Bubble({
 
   if ('intent' in d) {
     if (d.intent === 'explain') return card(<ExplainCard text={d.topic_explaination} />);
+    if (d.intent === 'take_action')
+      return card(<ActionCard text={d.text} changed={d.actions_taken.length > 0} />);
     if (d.intent === 'quiz') return card(<QuizLaunchCard onStart={onStartQuiz} />);
     if (d.intent === 'submit_quiz') return card(<QuizResultCard result={d.quiz_result} />);
     if (d.intent === 'find_resources') return card(<ResourcesCard suggestions={d.suggestions} />);
@@ -425,6 +448,9 @@ function TopicActions({
 }) {
   const from = roadmapTitle ? ` from the "${roadmapTitle}" roadmap` : '';
   const actions = [
+    // First because it's the one that changes something: the other three answer
+    // questions about the topic, this one picks it up.
+    { label: 'Start it', prompt: `Start "${topic.title}"${from} for me` },
     { label: 'Explain', prompt: `Explain "${topic.title}"${from}` },
     { label: 'Quiz me', prompt: `Quiz me on "${topic.title}"${from}` },
     { label: 'Resources', prompt: `Find resources for "${topic.title}"${from}` },
@@ -458,7 +484,6 @@ function TopicActions({
 export default function ChatBot() {
   const { token } = useAuth();
   const router = useRouter();
-  const [openBot, setOpenBot] = useState(false);
   const {
     prefill,
     source,
@@ -503,7 +528,16 @@ export default function ChatBot() {
     resetChat,
     roadmaps,
     selectedTopic,
+    // Open state lives in the store because the briefing opens this panel from
+    // a screen that isn't its parent — see `openChat`.
+    chatOpen: openBot,
+    openChat,
+    closeChat,
+    consumeChatPrompt,
+    briefing,
+    fetchBriefing,
   } = useLearningStore();
+  const runBriefingAction = useBriefingAction();
 
   const roadmapTitle = roadmaps.find((r) => r._id === roadmapId)?.title;
   // A selection made on one roadmap must not leak into another's chat.
@@ -512,6 +546,22 @@ export default function ChatBot() {
   useEffect(() => {
     scrollRef.current?.scrollToEnd({ animated: false });
   }, [chatMessages.length, chatLoading]);
+
+  // A question handed over by the briefing is sent as though the learner had
+  // typed it. One-shot — `consumeChatPrompt` clears as it reads, so re-opening
+  // the panel later doesn't re-ask what was already asked.
+  useEffect(() => {
+    if (!openBot || !token) return;
+    const queued = consumeChatPrompt();
+    if (queued) sendChatMessage(queued, roadmapId, useStream);
+  }, [openBot, token]);
+
+  // The panel's opening line is the same briefing Today shows. Fetched here too
+  // because the tutor follows the learner across the whole section and may be
+  // opened from a screen that never asked for one; on a repeat it's a cache read.
+  useEffect(() => {
+    if (openBot && !briefing) fetchBriefing();
+  }, [openBot]);
 
   const handleSend = () => {
     if (!input.trim() || chatLoading || !token) return;
@@ -526,19 +576,25 @@ export default function ChatBot() {
   };
 
   // What the panel offers depends on where the learner is standing.
+  // Each set leads with something that *does* rather than explains. The tutor can
+  // act now, and a learner has no way to discover that from a panel whose every
+  // suggestion asks it a question.
   const suggestions = topic
     ? [
+        { label: 'Start this topic', prompt: `Start "${topic.title}" for me` },
         { label: 'Explain this', prompt: `Explain "${topic.title}"` },
         { label: 'Quiz me', prompt: `Quiz me on "${topic.title}"` },
         { label: 'Find resources', prompt: `Find resources for "${topic.title}"` },
       ]
     : onRoadmapDetail
       ? [
+          { label: "Today's lesson", prompt: 'Send me the next lesson now' },
           { label: 'What next?', prompt: 'What should I work on next?' },
           { label: 'Quiz me', prompt: 'Quiz me on this roadmap' },
           { label: 'Explain a topic', prompt: 'Explain a topic from this roadmap' },
         ]
       : [
+          { label: "Today's lesson", prompt: 'Send me the next lesson now' },
           { label: 'Create a roadmap', prompt: 'Create a learning roadmap for me' },
           { label: 'Quiz me', prompt: 'Quiz me on something I am learning' },
           { label: 'Explain a topic', prompt: 'Explain a topic to me' },
@@ -600,7 +656,7 @@ export default function ChatBot() {
   if (!openBot) {
     return (
       <TouchableOpacity
-        onPress={() => setOpenBot(true)}
+        onPress={() => openChat()}
         activeOpacity={0.85}
         accessibilityRole="button"
         accessibilityLabel="Open the tutor"
@@ -630,7 +686,7 @@ export default function ChatBot() {
           live, and dimming it would say otherwise. */}
       {!docked && (
         <Pressable
-          onPress={() => setOpenBot(false)}
+          onPress={() => closeChat()}
           accessibilityLabel="Close the tutor"
           className="absolute inset-0"
           // Not `bg-black/40`: the slash-opacity form compiles to a colour-mix
@@ -654,7 +710,7 @@ export default function ChatBot() {
             <Text className="text-ink-soft text-[13px] font-bold">New chat</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => setOpenBot(false)}
+            onPress={() => closeChat()}
             className="bg-surface-alt h-8 w-8 items-center justify-center rounded-full"
             activeOpacity={0.7}
             accessibilityRole="button"
@@ -670,22 +726,61 @@ export default function ChatBot() {
             ref={scrollRef}
             className="flex-1 px-4 pt-4"
             contentContainerStyle={{ paddingBottom: 8 }}>
-            {chatMessages.length === 0 && (
-              <View className="items-center py-10">
-                <View className="bg-primary-soft mb-4 h-16 w-16 items-center justify-center rounded-full">
-                  <SparklesIcon size={26} color={colors.primary} />
+            {chatMessages.length === 0 &&
+              // The tutor opens the conversation rather than waiting to be
+              // addressed. "Hi — ask me anything" put the whole burden of
+              // knowing what to ask on the person who came here because they
+              // didn't; the briefing already knows what is waiting for them, so
+              // it says that and offers to act on it.
+              (briefing ? (
+                <View className="py-2">
+                  <View className="mb-3 flex-row items-start gap-2.5">
+                    <View className="bg-primary-soft h-8 w-8 items-center justify-center rounded-full">
+                      <SparklesIcon size={16} color={colors.primary} />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-ink text-[15px] leading-relaxed font-semibold">
+                        {briefing.headline}
+                      </Text>
+                      {!!briefing.detail && (
+                        <Text className="text-ink-soft mt-1 text-[15px] leading-relaxed">
+                          {briefing.detail}
+                        </Text>
+                      )}
+                      <BriefingActions
+                        actions={briefing.actions}
+                        onAction={runBriefingAction}
+                        busy={chatLoading}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Still offered, below the recommendation: the briefing says
+                      what matters, these say what else is possible. */}
+                  <Text className="text-ink-faint mt-2 mb-2 text-[13px]">Or ask about:</Text>
+                  <Suggestions items={suggestions} onPick={handleAsk} disabled={chatLoading} />
+                  {!!emptyStateHint && (
+                    <Text className="text-ink-faint mt-3 text-[13px] leading-relaxed">
+                      {emptyStateHint}
+                    </Text>
+                  )}
                 </View>
-                <Text className="text-ink mb-4 text-center text-[15px]">
-                  Hi — ask me anything, or try:
-                </Text>
-                <Suggestions items={suggestions} onPick={handleAsk} disabled={chatLoading} />
-                {!!emptyStateHint && (
-                  <Text className="text-ink-faint mt-4 text-center text-[13px] leading-relaxed">
-                    {emptyStateHint}
+              ) : (
+                <View className="items-center py-10">
+                  <View className="bg-primary-soft mb-4 h-16 w-16 items-center justify-center rounded-full">
+                    <SparklesIcon size={26} color={colors.primary} />
+                  </View>
+                  <Text className="text-ink mb-4 text-center text-[15px]">
+                    Hi — ask me anything, or try:
                   </Text>
-                )}
-              </View>
-            )}
+                  <Suggestions items={suggestions} onPick={handleAsk} disabled={chatLoading} />
+                  {!!emptyStateHint && (
+                    <Text className="text-ink-faint mt-4 text-center text-[13px] leading-relaxed">
+                      {emptyStateHint}
+                    </Text>
+                  )}
+                </View>
+              ))}
 
             {chatMessages.map((msg) => (
               <Bubble

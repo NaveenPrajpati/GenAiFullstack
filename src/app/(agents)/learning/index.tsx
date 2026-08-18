@@ -9,6 +9,7 @@ import SectionNav, { useWideNav } from '@/components/ui/SectionNav';
 import { StatsGrid, type Stat } from '@/components/ui/StatTile';
 import { useColors } from '@/components/ui/theme';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { BriefingCard, useBriefingAction } from '@/features/learning/components/Briefing';
 import { useLearningStore } from '@/features/learning/store';
 import type {
   BlockedReason,
@@ -330,7 +331,11 @@ export default function LearningHome() {
     reachedServer,
     pendingMarks,
     flushPendingMarks,
+    briefing,
+    briefingLoading,
+    fetchBriefing,
   } = useLearningStore();
+  const runBriefingAction = useBriefingAction();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState('');
   // Which roadmap is generating, not just whether one is: with several cards on
@@ -349,6 +354,9 @@ export default function LearningHome() {
       fetchStats();
       fetchReviews();
       fetchFocus();
+      // Cheap on a repeat visit: the server replays one briefing per situation,
+      // so this is a cache read until something the learner did changes it.
+      fetchBriefing();
     }, [])
   );
 
@@ -427,6 +435,16 @@ export default function LearningHome() {
 
         <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 40 }}>
           <PageBody className="pt-3">
+            {/* Above the numbers deliberately: the tiles say how far along you
+                are, the briefing says what to do in the next ten minutes, and
+                only one of those is worth the top of the screen. */}
+            <BriefingCard
+              briefing={briefing}
+              loading={briefingLoading}
+              busy={!!generatingFor}
+              onAction={runBriefingAction}
+            />
+
             {tiles.length > 0 && (
               <View className="mb-4">
                 <StatsGrid stats={tiles} />

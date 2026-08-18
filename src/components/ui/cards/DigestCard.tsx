@@ -5,7 +5,7 @@ import { useColors } from '@/components/ui/theme';
 import { DigestMarkdown } from '@/features/learning/components/Markdown';
 import type { Digest, DigestCheckFailure } from '@/features/learning/types';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Linking, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 function DigestCard({
@@ -25,7 +25,9 @@ function DigestCard({
 }) {
   const router = useRouter();
   const questions = digest.quiz ?? [];
-  const [selected, setSelected] = useState<(number | null)[]>([]);
+  /** Picks by question index. A map rather than an array sized to the questions,
+   *  so a new check needs nothing initialised before it can be answered. */
+  const [selected, setSelected] = useState<Record<number, number>>({});
   // Sources are collapsed by default: they're a side door out of the digest,
   // not the thing being read.
   const [showSources, setShowSources] = useState(false);
@@ -35,22 +37,30 @@ function DigestCard({
   // tapped. Kept apart from `selected`, which is indexed by option.
   const [written, setWritten] = useState<Record<number, string>>({});
 
-  useEffect(() => {
-    setSelected(new Array(questions.length).fill(null));
+  // A re-teach rewrites a digest's check in place, so the question count is part
+  // of the identity here and not just the id. Cleared during render rather than
+  // in an effect: an effect runs after the paint, which showed the old answers
+  // against the new questions for a frame — on a check the learner had just got
+  // wrong, exactly the moment that flash is most alarming.
+  const answersFor = `${digest._id}:${questions.length}`;
+  const [pickedFor, setPickedFor] = useState<string | null>(null);
+  if (answersFor !== pickedFor) {
+    setPickedFor(answersFor);
+    setSelected({});
     setWritten({});
-  }, [digest._id, questions.length]);
+  }
 
   const taps = questions.filter((q) => q.kind !== 'open');
-  const answered = selected.filter((s, i) => s !== null && questions[i]?.kind !== 'open').length;
+  const answers = questions
+    .map((q, i) =>
+      q.kind !== 'open' && selected[i] !== undefined ? { question: i, answer: selected[i] } : null
+    )
+    .filter((x): x is { question: number; answer: number } => x !== null);
+  const answered = answers.length;
   const writtenDone = questions.every(
     (q, i) => q.kind !== 'open' || (written[i] ?? '').trim().length > 0
   );
   const ready = questions.length === 0 || (answered === taps.length && writtenDone);
-  const answers = selected
-    .map((a, i) =>
-      a !== null && questions[i]?.kind !== 'open' ? { question: i, answer: a } : null
-    )
-    .filter((x): x is { question: number; answer: number } => x !== null);
 
   const sources = digest.resources.filter((r) => !!r.url);
 
@@ -170,13 +180,7 @@ function DigestCard({
                     <TouchableOpacity
                       key={optIdx}
                       disabled={busy}
-                      onPress={() =>
-                        setSelected((prev) => {
-                          const next = [...prev];
-                          next[qIdx] = optIdx;
-                          return next;
-                        })
-                      }
+                      onPress={() => setSelected((prev) => ({ ...prev, [qIdx]: optIdx }))}
                       accessibilityRole="radio"
                       accessibilityState={{ checked: isSel }}
                       className={`mb-1.5 flex-row items-center gap-2.5 rounded-xl border px-3 py-2.5 ${

@@ -13,6 +13,7 @@ import { loadOutbox, loadSnapshot, saveOutbox, type QueuedMark } from './cache';
 import * as api from './learningApi';
 import { syncDigestWidget } from './widgets/sync';
 import type {
+  Briefing,
   ChatMessage,
   ChatResultData,
   Checkpoint,
@@ -73,6 +74,17 @@ function interpretResult(result: any): { content: string; msgData: ChatResultDat
     const content = result.topic_explaination ?? '';
     return { content, msgData: { type: 'plain', text: content } };
   }
+  if (result?.intent === 'take_action') {
+    const content = result.topic_explaination ?? 'Done.';
+    return {
+      content,
+      msgData: {
+        intent: 'take_action',
+        text: content,
+        actions_taken: result.actions_taken ?? [],
+      },
+    };
+  }
   if (result?.intent === 'quiz') {
     return {
       content: 'Here is a quiz for you!',
@@ -102,11 +114,14 @@ function interpretResult(result: any): { content: string; msgData: ChatResultDat
       };
     }
     return {
-      content: `Next topic: ${result.next_topic}`,
+      // The coached sentence leads when there is one: it's the answer to what
+      // they asked, and "Next topic: X" is the label on the card below it.
+      content: result.guidance?.trim() || `Next topic: ${result.next_topic}`,
       msgData: {
         intent: 'query_roadmap',
         next_topic: result.next_topic,
         progress: result.progress,
+        guidance: result.guidance,
       },
     };
   }
@@ -240,6 +255,20 @@ type LearningState = {
   selectedTopic: SelectedTopic | null;
   setSelectedTopic: (topic: SelectedTopic | null) => void;
 
+  /**
+   * Whether the tutor panel is open, and anything queued to say on its behalf.
+   *
+   * Lived in the panel's own state until the briefing needed to open it: an
+   * action like "ask me to explain this" has to reach a component that isn't its
+   * parent and isn't on the same screen. `chatPrompt` is one-shot — the panel
+   * sends it and clears it, so re-opening later doesn't re-ask.
+   */
+  chatOpen: boolean;
+  chatPrompt: string | null;
+  openChat: (prompt?: string) => void;
+  closeChat: () => void;
+  consumeChatPrompt: () => string | null;
+
   chatMessages: ChatMessage[];
   chatThreadId: string;
   chatLoading: boolean;
@@ -281,6 +310,12 @@ type LearningState = {
   /** What's underway and when the next digest is due. */
   focus: LearningFocus | null;
   fetchFocus: () => Promise<void>;
+
+  /** The assistant's read on what to do next. Server-generated per situation,
+   *  so refetching on focus is cheap — see `getBriefing`. */
+  briefing: Briefing | null;
+  briefingLoading: boolean;
+  fetchBriefing: () => Promise<void>;
   markDigest: (
     digestId: string,
     opts?: {
@@ -753,6 +788,16 @@ export const useLearningStore = create<LearningState>((set, get) => ({
   selectedTopic: null,
   setSelectedTopic: (topic) => set({ selectedTopic: topic }),
 
+  chatOpen: false,
+  chatPrompt: null,
+  openChat: (prompt) => set({ chatOpen: true, chatPrompt: prompt ?? null }),
+  closeChat: () => set({ chatOpen: false }),
+  consumeChatPrompt: () => {
+    const prompt = get().chatPrompt;
+    if (prompt) set({ chatPrompt: null });
+    return prompt;
+  },
+
   chatMessages: [],
   chatThreadId: genId(),
   chatLoading: false,
@@ -855,6 +900,33 @@ export const useLearningStore = create<LearningState>((set, get) => ({
         pendingOnboarding: msgData.prompt,
         chatThreadId: msgData.prompt.threadId ?? s.chatThreadId,
       }));
+    } else if ('intent' in msgData && msgData.intent === 'take_action') {
+      // The tutor changed something server-side, so whatever it touched is now
+      // stale on screen. Driven off the tool names rather than refetching
+      // everything: a saved note shouldn't cost a roadmap re-read, and the
+      // briefing is the one thing every action invalidates — its whole subject is
+      // the situation that just moved.
+      const ran = new Set(msgData.actions_taken);
+      const refresh = get();
+      if (ran.size > 0) refresh.fetchBriefing();
+      if (ran.has('start_topic')) {
+        refresh.fetchRoadmaps();
+        refresh.fetchFocus();
+      }
+      if (ran.has('pull_next_lesson')) {
+        refresh.fetchUnreadDigests();
+        refresh.fetchFocus();
+      }
+      if (ran.has('pause_roadmap') || ran.has('resume_roadmap')) {
+        refresh.fetchRoadmaps();
+        refresh.fetchStats();
+        refresh.fetchFocus();
+      }
+      if (ran.has('save_note')) refresh.fetchNotes();
+      if (ran.has('set_digest_time')) {
+        refresh.fetchTriggers();
+        refresh.fetchFocus();
+      }
     } else if ('intent' in msgData && msgData.intent === 'quiz') {
       set({ activeQuiz: { questions: msgData.quiz, quizId: msgData.quizId } });
     } else if ('intent' in msgData && msgData.intent === 'submit_quiz') {
@@ -974,6 +1046,25 @@ export const useLearningStore = create<LearningState>((set, get) => ({
       set({ focus: data.result ?? null, reachedServer: true });
     } catch {
       // The home screen still renders the queue without it.
+    }
+  },
+
+  briefing: null,
+  briefingLoading: false,
+  fetchBriefing: async () => {
+    // Loading is only reported on the first fetch. On every later one the
+    // previous briefing stays on screen while the new one is fetched: the
+    // situation rarely changes between two opens, so tearing the card down to a
+    // spinner would flicker it away and back with the same words in it.
+    set((s) => ({ briefingLoading: s.briefing === null }));
+    try {
+      const data = await api.getBriefing();
+      set({ briefing: data.result ?? null });
+    } catch {
+      // Advisory, and the screen below it answers the same question in more
+      // words. Never let it take the home screen down.
+    } finally {
+      set({ briefingLoading: false });
     }
   },
 
