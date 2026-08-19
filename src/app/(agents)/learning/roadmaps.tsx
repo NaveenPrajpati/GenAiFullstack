@@ -184,7 +184,9 @@ function ReviewsCard({
   onOpen,
 }: {
   reviews: DueReview[];
-  onOpen: (roadmapId: string) => void;
+  /** Each row names one topic, so it opens that topic rather than the roadmap
+   *  it sits on — the review is the thing being offered. */
+  onOpen: (review: DueReview) => void;
 }) {
   return (
     <View className="border-warning bg-warning-soft mb-3 rounded-2xl border p-4">
@@ -197,7 +199,7 @@ function ReviewsCard({
       {reviews.slice(0, 3).map((r) => (
         <TouchableOpacity
           key={`${r.roadmapId}:${r.topicId}`}
-          onPress={() => onOpen(r.roadmapId)}
+          onPress={() => onOpen(r)}
           className="bg-surface mb-1.5 flex-row items-center justify-between gap-2 rounded-xl px-3 py-2.5"
           activeOpacity={0.7}>
           <View className="flex-1">
@@ -350,7 +352,7 @@ export default function RoadmapsScreen() {
             {reviews.length > 0 && (
               <ReviewsCard
                 reviews={reviews}
-                onOpen={(roadmapId) => router.push(`/learning/${roadmapId}`)}
+                onOpen={(r) => router.push(`/learning/${r.roadmapId}/${r.topicId}`)}
               />
             )}
 

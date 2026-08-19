@@ -84,7 +84,10 @@ function WeakestTopics({ mastery }: { mastery: MasterySummary }) {
       {shaky.map((t) => (
         <TouchableOpacity
           key={`${t.roadmapId}:${t.topicId}`}
-          onPress={() => router.push(`/learning/${t.roadmapId}`)}
+          // The topic itself, not the roadmap holding it: this card names one
+          // thing that isn't sticking, and a list to hunt through is a worse
+          // answer to that than the topic's own screen.
+          onPress={() => router.push(`/learning/${t.roadmapId}/${t.topicId}`)}
           className="mb-1.5 flex-row items-center justify-between gap-2"
           activeOpacity={0.7}>
           <View className="flex-1">
@@ -219,11 +222,18 @@ function FocusCard({
   // fetch those tips — offering "Take the checkpoint" would just be refused.
   const revising = focus.blocked_reason === 'needs_revision';
 
+  // The card is about a roadmap but the learner is on one topic of it, so the
+  // body opens that topic and the title is what opens the roadmap.
+  const openTopic = () =>
+    router.push(
+      focus.topic
+        ? `/learning/${focus.roadmapId}/${focus.topic.id}`
+        : `/learning/${focus.roadmapId}`
+    );
+
   return (
     <Card className="mb-3">
-      <TouchableOpacity
-        onPress={() => router.push(`/learning/${focus.roadmapId}`)}
-        activeOpacity={0.7}>
+      <TouchableOpacity onPress={openTopic} activeOpacity={0.7}>
         <View className="flex-row items-start justify-between gap-3">
           <Text className="text-ink flex-1 text-[20px] font-bold" numberOfLines={2}>
             {focus.roadmapTitle}
@@ -257,10 +267,7 @@ function FocusCard({
           set is visible and a swap actually makes sense. */}
       <View className="mt-3 flex-row items-center justify-between gap-3">
         {review ? (
-          <Button
-            label="Take the checkpoint"
-            onPress={() => router.push(`/learning/${focus.roadmapId}`)}
-          />
+          <Button label="Take the checkpoint" onPress={openTopic} />
         ) : (
           <Button
             label={
@@ -301,14 +308,21 @@ function CaughtUp({ hasRoadmaps }: { hasRoadmaps: boolean }) {
       <Text className="text-ink mt-2 text-[20px] font-bold">You&apos;re all caught up</Text>
       <Text className="text-ink-soft mt-1 mb-4 text-center text-[15px] leading-relaxed">
         {hasRoadmaps
-          ? 'No digests waiting. Check back tomorrow, or explore a roadmap.'
+          ? 'No lessons waiting. A few minutes of practice keeps the earlier topics from fading.'
           : 'Start a roadmap and your first digest will land here.'}
       </Text>
-      <Button
-        label="Browse roadmaps"
-        variant={hasRoadmaps ? 'secondary' : 'primary'}
-        onPress={() => router.push('/learning/roadmaps')}
-      />
+      {/* The whole reason practice exists: this card used to say "check back
+          tomorrow", which is the one message guaranteed to end the session. */}
+      <View className="flex-row gap-2">
+        {hasRoadmaps && (
+          <Button label="Practise now" onPress={() => router.push('/learning/practice')} />
+        )}
+        <Button
+          label="Browse roadmaps"
+          variant={hasRoadmaps ? 'secondary' : 'primary'}
+          onPress={() => router.push('/learning/roadmaps')}
+        />
+      </View>
     </Card>
   );
 }
@@ -481,19 +495,24 @@ export default function LearningHome() {
                   </View>
                 )}
 
-                {focus.roadmaps.length === 0 ? (
-                  <NoActiveRoadmaps hasRoadmaps={(stats?.roadmaps.total ?? 0) > 0} />
-                ) : (
-                  focus.roadmaps.map((item) => (
-                    <FocusCard
-                      key={item.roadmapId}
-                      focus={item}
-                      nextAt={running === 1 ? focus.next_at : null}
-                      onGenerate={() => handleGenerate(item.roadmapId, item.topic?.id)}
-                      generating={generatingFor === item.roadmapId}
-                    />
-                  ))
-                )}
+                {focus.roadmaps.length === 0
+                  ? // Only when the briefing hasn't already said it. The very first
+                    // screen a new account sees was stacking two cards with the
+                    // same message — and this one's button goes to the roadmap
+                    // list, which is just as empty, while the briefing's opens the
+                    // tutor that can actually build one. The briefing always
+                    // answers (it falls back to deterministic copy), so this is now
+                    // the empty state for when that fetch failed.
+                    !briefing && <NoActiveRoadmaps hasRoadmaps={(stats?.roadmaps.total ?? 0) > 0} />
+                  : focus.roadmaps.map((item) => (
+                      <FocusCard
+                        key={item.roadmapId}
+                        focus={item}
+                        nextAt={running === 1 ? focus.next_at : null}
+                        onGenerate={() => handleGenerate(item.roadmapId, item.topic?.id)}
+                        generating={generatingFor === item.roadmapId}
+                      />
+                    ))}
 
                 {/* A free slot is only worth mentioning once there's something to
                     put in it. */}
@@ -516,7 +535,11 @@ export default function LearningHome() {
 
             {reviews.length > 0 && (
               <TouchableOpacity
-                onPress={() => router.push(`/learning/${reviews[0].roadmapId}`)}
+                // Straight into the one that's due soonest — the list is sorted
+                // by due date, and "start the review" should start a review.
+                onPress={() =>
+                  router.push(`/learning/${reviews[0].roadmapId}/${reviews[0].topicId}`)
+                }
                 className="border-warning bg-warning-soft mb-3 flex-row items-center justify-between gap-2 rounded-xl border px-3.5 py-3"
                 activeOpacity={0.8}>
                 <Text className="text-warning flex-1 text-[13px] font-medium" numberOfLines={1}>

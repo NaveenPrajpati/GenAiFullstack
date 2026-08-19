@@ -70,8 +70,8 @@ strength of teaching that might actually land, rather than on persistence.
 
 ## Finishing a topic
 
-Once the digests have taught the whole topic, the checkpoint opens: four questions,
-80% to pass.
+Once the digests have taught the whole topic, the checkpoint opens: five questions,
+80% to pass — so one of them can go wrong.
 
 **Passing is the only way a topic is marked complete.** There is no "mark as done"
 anywhere in this app. A finished roadmap means you recalled something, not that you

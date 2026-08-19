@@ -44,7 +44,11 @@ export default function LearningLayout() {
             {/* With the rail visible these are lateral moves, not a drill-down,
                 so the stack's own back-arrow header would be misleading. */}
             <Stack.Screen name="roadmaps" />
-            <Stack.Screen name="[id]" options={{ title: 'Roadmap' }} />
+            <Stack.Screen name="[id]/index" options={{ title: 'Roadmap' }} />
+            {/* A topic is a drill-down from its roadmap, and the only screen in
+                the section that is. It carries its own back control. */}
+            <Stack.Screen name="[id]/[topicId]" options={{ title: 'Topic' }} />
+            <Stack.Screen name="practice" options={{ title: 'Practice' }} />
             <Stack.Screen name="quiz" />
             <Stack.Screen name="notes" options={{ title: 'My notes' }} />
             <Stack.Screen name="digests" options={{}} />

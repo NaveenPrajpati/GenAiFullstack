@@ -63,13 +63,14 @@ export function useBriefingAction() {
 
       case 'open_checkpoint':
         if (!action.roadmapId) return;
-        router.push({
-          pathname: '/learning/[id]',
-          params: {
-            id: action.roadmapId,
-            ...(action.topicId ? { focusTopic: action.topicId, action: 'checkpoint' } : {}),
-          },
-        });
+        // Straight to the topic, which is where the checkpoint lives. It used to
+        // hand `focusTopic` to the roadmap screen so it could expand the right
+        // row and scroll to it; a topic with its own route needs none of that.
+        router.push(
+          action.topicId
+            ? `/learning/${action.roadmapId}/${action.topicId}`
+            : `/learning/${action.roadmapId}`
+        );
         return;
 
       case 'open_reviews': {
@@ -80,13 +81,7 @@ export function useBriefingAction() {
         const roadmapId = action.roadmapId ?? first?.roadmapId;
         if (!roadmapId) return;
         const topicId = action.topicId ?? first?.topicId;
-        router.push({
-          pathname: '/learning/[id]',
-          params: {
-            id: roadmapId,
-            ...(topicId ? { focusTopic: topicId, action: 'checkpoint' } : {}),
-          },
-        });
+        router.push(topicId ? `/learning/${roadmapId}/${topicId}` : `/learning/${roadmapId}`);
         return;
       }
 

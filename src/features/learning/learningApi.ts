@@ -221,6 +221,27 @@ export async function getMisconceptions(roadmapId?: string) {
   return res.data;
 }
 
+/**
+ * POST /practice — build a short mixed-topic deck.
+ *
+ * Declines with 409 when the learner hasn't finished a topic yet: there is
+ * nothing to retrieve, and that's an answer rather than a failure.
+ */
+export async function startPractice() {
+  const res = await http.post(`/learning/practice`);
+  return res.data;
+}
+
+/** POST /practice/submit — grade it. Comes back with the answers: practice
+ *  unlocks nothing, so there's no retry to protect. */
+export async function submitPractice(
+  quizId: string,
+  answers: { question: number; answer: number }[]
+) {
+  const res = await http.post(`/learning/practice/submit`, { quizId, answers });
+  return res.data;
+}
+
 /** GET /reviews — topics whose spaced-repetition review has come due. */
 export async function getReviews(limit = 20) {
   const res = await http.get(`/learning/reviews`, { params: { limit } });

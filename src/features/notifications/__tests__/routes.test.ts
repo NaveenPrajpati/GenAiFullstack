@@ -10,23 +10,28 @@
 import { routeForNotification } from '../routes';
 
 describe('learning notifications', () => {
-  // All three land on the archive: to this screen a digest, a revision and a
-  // re-teach are the same artefact.
+  // All three land on the topic: to the learner a digest, a revision and a
+  // re-teach are the same artefact, and the topic screen is where the lesson can
+  // be read *and* its recall check answered without a second hop.
   it.each(['learning_digest', 'learning_revision', 'learning_reteach'])(
-    '%s opens the digest archive filtered to its topic',
+    '%s opens the topic it is about',
     (type) => {
       expect(routeForNotification({ type, roadmapId: 'r1', topicId: 't1' })).toBe(
-        '/learning/digests?roadmapId=r1&topicId=t1'
+        '/learning/r1/t1'
       );
     }
   );
 
-  it('drops filters the payload omits rather than sending them as undefined', () => {
-    // `?roadmapId=undefined` is a filter that matches nothing, which the screen
-    // would render as an empty archive — worse than no filter at all.
+  it('falls back to the archive when the payload cannot address a topic', () => {
+    // The topic route needs both ids. Without them the archive is the only
+    // destination that resolves — and `?roadmapId=undefined` is a filter that
+    // matches nothing, which would render as an empty archive.
     expect(routeForNotification({ type: 'learning_digest' })).toBe('/learning/digests');
     expect(routeForNotification({ type: 'learning_digest', roadmapId: 'r1' })).toBe(
       '/learning/digests?roadmapId=r1'
+    );
+    expect(routeForNotification({ type: 'learning_digest', topicId: 't1' })).toBe(
+      '/learning/digests?topicId=t1'
     );
   });
 
@@ -34,6 +39,12 @@ describe('learning notifications', () => {
     expect(routeForNotification({ type: 'learning_digest', roadmapId: 'a&topicId=b' })).toBe(
       '/learning/digests?roadmapId=a%26topicId%3Db'
     );
+  });
+
+  it('escapes ids so a stray slash cannot forge a path segment', () => {
+    expect(
+      routeForNotification({ type: 'learning_digest', roadmapId: 'r1/x', topicId: 't1' })
+    ).toBe('/learning/r1%2Fx/t1');
   });
 
   it('ignores non-string ids instead of stringifying them into the query', () => {

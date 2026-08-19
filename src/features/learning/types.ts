@@ -49,12 +49,21 @@ export type TopicNode = {
   difficulty?: Difficulty;
   resources?: Resource[];
   progress_status?: ProgressStatus;
+  /**
+   * The MOST RECENT checkpoint's score, overwritten on every attempt.
+   *
+   * Not a mastery figure, despite the name: it knows nothing about digest checks
+   * or reviews, and it does not decay. For how well a topic is actually held,
+   * read `RoadmapInsights.topic_mastery` — the same number every other screen
+   * shows. Showing this one under the word "mastery" is what had a single topic
+   * reporting two different figures in two places.
+   */
   mastery_score?: number;
   completed_at?: string;
   next_review_at?: string;
-  /** A failed checkpoint owes one round of revision before the next attempt.
-   *  While `checkpoint_attempts` exceeds `revisions_done` the server refuses to
-   *  issue one — see `revisionOwed`. */
+  /** How many checkpoint attempts have FAILED — it only increments on a failure,
+   *  because it is the revision debt, not an attempt count. While it exceeds
+   *  `revisions_done` the server refuses a retry — see `revisionOwed`. */
   checkpoint_attempts?: number;
   revisions_done?: number;
   /** The questions the last failed attempt got wrong. */
@@ -440,6 +449,51 @@ export type RoadmapInsights = {
   current_personalization: Record<string, any>;
   /** {topicId: count} — which topics have been written about. */
   note_counts: Record<string, number>;
+  /**
+   * {topicId: mastery} from the same computation behind the home screen's
+   * numbers — an age-weighted mean over every graded attempt, decayed once a
+   * review goes overdue.
+   *
+   * Not to be confused with `TopicNode.mastery_score`, which is the *last
+   * checkpoint's* score and is overwritten on each attempt. Reading that one and
+   * calling it mastery is what had a topic reporting two different figures on
+   * two different screens.
+   */
+  topic_mastery: Record<string, TopicMastery>;
+};
+
+/**
+ * A short mixed-topic practice deck — the one piece of retrieval in the app that
+ * interleaves, and the only thing to do on a day with nothing waiting.
+ *
+ * It gates nothing and cannot cost anything: attempts feed the misconception
+ * tracker but are kept out of mastery, for the same reason a poor Feynman
+ * attempt is never recorded. Answers come back in full, because there is no
+ * retry here to protect from transcription.
+ */
+export type PracticeQuestion = QuizQuestion & {
+  topicId: string;
+  topicTitle?: string;
+};
+
+export type PracticeDeck = {
+  quizId: string;
+  questions: PracticeQuestion[];
+  topics: { roadmapId: string; topicId: string; title: string }[];
+};
+
+/** How each topic in a deck fared. Weakest first — with the deck mixed, which
+ *  topic let you down is the reading worth having. */
+export type PracticeTopicResult = {
+  roadmapId: string;
+  topicId: string;
+  title: string;
+  correct: number;
+  total: number;
+};
+
+export type PracticeResult = QuizResult & {
+  topics: PracticeTopicResult[];
 };
 
 /** The active-recall check a learner must pass to complete a topic. */
@@ -636,6 +690,11 @@ export type ChatResultData =
       proposal: Proposal;
       decision?: 'approved' | 'rejected';
       savedRoadmapId?: string;
+      /** Saved, but the active-roadmap cap parked it rather than refusing to
+       *  store what the learner just built. Silent until it was said out loud:
+       *  they were told "saved" and discovered it wasn't running by noticing no
+       *  lessons arrived. */
+      savedParked?: boolean;
     }
   | { type: 'onboarding'; prompt: OnboardingPrompt }
   | { type: 'plain'; text: string };

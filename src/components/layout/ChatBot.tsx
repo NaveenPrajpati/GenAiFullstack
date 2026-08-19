@@ -233,6 +233,7 @@ function ProposalCard({
   proposal,
   decision,
   savedRoadmapId,
+  savedParked,
   onApprove,
   onReject,
   onView,
@@ -241,6 +242,8 @@ function ProposalCard({
   proposal: Proposal;
   decision?: 'approved' | 'rejected';
   savedRoadmapId?: string;
+  /** The roadmap saved, but the active-roadmap cap parked it. */
+  savedParked?: boolean;
   onApprove: () => void;
   onReject: () => void;
   onView: (roadmapId?: string) => void;
@@ -287,12 +290,32 @@ function ProposalCard({
       )}
 
       {decision === 'approved' ? (
-        <TouchableOpacity
-          onPress={() => onView(savedRoadmapId)}
-          className="bg-success-soft items-center rounded-xl py-2.5"
-          activeOpacity={0.8}>
-          <Text className="text-success text-[13px] font-bold">✓ Roadmap saved — view it</Text>
-        </TouchableOpacity>
+        <>
+          {/* Approving at the active cap saves the roadmap but parks it, which
+              is the right call — nothing the learner built is lost — and was
+              completely silent. They were told it was saved, and found out it
+              wasn't running by noticing no lessons ever arrived. */}
+          {savedParked && (
+            <View className="border-warning bg-warning-soft mb-2 rounded-xl border p-3">
+              <Text className="text-warning text-[13px] font-semibold">Saved, but parked</Text>
+              <Text className="text-ink-soft mt-0.5 text-[13px] leading-relaxed">
+                You&apos;re already running the maximum number of roadmaps, so this one is paused
+                and won&apos;t send lessons yet. Pause one of the others from Roadmaps to start it.
+              </Text>
+            </View>
+          )}
+          <TouchableOpacity
+            onPress={() => onView(savedRoadmapId)}
+            className={`items-center rounded-xl py-2.5 ${
+              savedParked ? 'bg-surface-alt' : 'bg-success-soft'
+            }`}
+            activeOpacity={0.8}>
+            <Text
+              className={`text-[13px] font-bold ${savedParked ? 'text-ink-soft' : 'text-success'}`}>
+              ✓ Roadmap saved — view it
+            </Text>
+          </TouchableOpacity>
+        </>
       ) : decision === 'rejected' ? (
         <View className="bg-surface-alt items-center rounded-xl py-2.5">
           <Text className="text-ink-faint text-[13px] font-medium">Discarded</Text>
@@ -383,6 +406,7 @@ function Bubble({
         proposal={d.proposal}
         decision={d.decision}
         savedRoadmapId={d.savedRoadmapId}
+        savedParked={d.savedParked}
         onApprove={onApprove}
         onReject={onReject}
         onView={onView}
@@ -500,9 +524,21 @@ export default function ChatBot() {
   // isn't one of the named screens IS a roadmap id.
   const pathname = usePathname();
   const screen = pathname.split('/')[2] ?? '';
-  const onRoadmapDetail = !['', 'quiz', 'digests', 'settings', 'notes', 'roadmaps'].includes(
-    screen
-  );
+  // Every named screen in the section, because the rule here is "anything else is
+  // a roadmap id". Two were missing, so on Insights and Help the panel believed
+  // it was on a roadmap called "misconceptions" and sent that id to the server.
+  const NAMED = [
+    '',
+    'quiz',
+    'practice',
+    'digests',
+    'settings',
+    'notes',
+    'roadmaps',
+    'misconceptions',
+    'help',
+  ];
+  const onRoadmapDetail = !NAMED.includes(screen);
   const roadmapId = roadmapIdParam ?? (onRoadmapDetail ? screen : undefined);
 
   // The RAG path answers via the streaming endpoint; every other path uses the
@@ -531,6 +567,7 @@ export default function ChatBot() {
     // Open state lives in the store because the briefing opens this panel from
     // a screen that isn't its parent — see `openChat`.
     chatOpen: openBot,
+    chatPrompt,
     openChat,
     closeChat,
     consumeChatPrompt,
@@ -550,11 +587,17 @@ export default function ChatBot() {
   // A question handed over by the briefing is sent as though the learner had
   // typed it. One-shot — `consumeChatPrompt` clears as it reads, so re-opening
   // the panel later doesn't re-ask what was already asked.
+  //
+  // `chatPrompt` has to be a dependency, not just `openBot`. The briefing renders
+  // inside this panel as well as on Today, so its most likely tap is one made
+  // while the panel is ALREADY open — and `openChat` setting `chatOpen` to true
+  // when it is already true changes nothing React can see. The effect never
+  // re-ran, and the button did nothing at all.
   useEffect(() => {
-    if (!openBot || !token) return;
+    if (!openBot || !token || !chatPrompt) return;
     const queued = consumeChatPrompt();
     if (queued) sendChatMessage(queued, roadmapId, useStream);
-  }, [openBot, token]);
+  }, [openBot, token, chatPrompt]);
 
   // The panel's opening line is the same briefing Today shows. Fetched here too
   // because the tutor follows the learner across the whole section and may be

@@ -32,6 +32,8 @@ import type {
   MisconceptionReport,
   NoteKind,
   OnboardingPrompt,
+  PracticeDeck,
+  PracticeResult,
   ProgressStatus,
   Proposal,
   QuizQuestion,
@@ -286,6 +288,17 @@ type LearningState = {
   resolveProposal: (decision: 'approved' | 'rejected') => Promise<string | undefined>;
   resolveOnboarding: (answers: Record<string, string> | null) => Promise<void>;
   resetChat: () => void;
+
+  /** The mixed-topic practice deck, and how it went. Kept apart from `activeQuiz`
+   *  — that one is a chat-issued quiz on a single topic, and the two differ in
+   *  what they're scored against and where they're taken. */
+  practice: PracticeDeck | null;
+  practiceResult: PracticeResult | null;
+  practiceLoading: boolean;
+  practiceError: string;
+  startPractice: () => Promise<PracticeDeck | null>;
+  submitPractice: (answers: { question: number; answer: number }[]) => Promise<void>;
+  clearPractice: () => void;
 
   activeQuiz: { questions: QuizQuestion[]; quizId: string } | null;
   quizResult: QuizResult | null;
@@ -567,6 +580,7 @@ export const useLearningStore = create<LearningState>((set, get) => ({
             profile_changes: r.profile_changes ?? [],
             current_personalization: r.current_personalization ?? {},
             note_counts: r.note_counts ?? {},
+            topic_mastery: r.topic_mastery ?? {},
           },
         },
       }));
@@ -955,6 +969,9 @@ export const useLearningStore = create<LearningState>((set, get) => ({
 
     const data = await api.resolveApproval({ thread_id: proposal.threadId, decision });
     const savedRoadmapId = data.result?.roadmapId as string | undefined;
+    // The server parks a new roadmap when the active slots are full, and reports
+    // it on the saved model's own status rather than in a separate flag.
+    const savedParked = data.result?.roadmap?.status === 'paused';
 
     // Switch the card that raised this proposal to a confirmation, so the same
     // roadmap can't be approved twice from a stale bubble.
@@ -963,7 +980,7 @@ export const useLearningStore = create<LearningState>((set, get) => ({
       pendingProposalMessageId: null,
       chatMessages: s.chatMessages.map((m) =>
         m.id === messageId && m.data && 'type' in m.data && m.data.type === 'approval_request'
-          ? { ...m, data: { ...m.data, decision, savedRoadmapId } }
+          ? { ...m, data: { ...m.data, decision, savedRoadmapId, savedParked } }
           : m
       ),
     }));
@@ -1001,6 +1018,52 @@ export const useLearningStore = create<LearningState>((set, get) => ({
       pendingProposalMessageId: null,
       pendingOnboarding: null,
     }),
+
+  practice: null,
+  practiceResult: null,
+  practiceLoading: false,
+  practiceError: '',
+  startPractice: async () => {
+    set({ practiceLoading: true, practiceError: '', practiceResult: null, practice: null });
+    try {
+      const data = await api.startPractice();
+      set({ practice: data.result ?? null });
+      return data.result ?? null;
+    } catch (e: any) {
+      // A 409 here is "you haven't finished a topic yet", which the server words
+      // for us — it's the honest answer, not an error to paper over.
+      const detail = e?.response?.data?.detail;
+      set({
+        practiceError:
+          (typeof detail === 'string' ? detail : detail?.message) ??
+          'Could not put a practice set together.',
+      });
+      return null;
+    } finally {
+      set({ practiceLoading: false });
+    }
+  },
+  submitPractice: async (answers) => {
+    const deck = get().practice;
+    if (!deck) return;
+    set({ practiceLoading: true, practiceError: '' });
+    try {
+      const data = await api.submitPractice(deck.quizId, answers);
+      set({ practiceResult: data.result ?? null });
+      // Practice is kept out of mastery on purpose, but it does move the
+      // misconception picture — and the briefing reads that.
+      get().fetchBriefing();
+    } catch (e: any) {
+      const detail = e?.response?.data?.detail;
+      set({
+        practiceError:
+          (typeof detail === 'string' ? detail : detail?.message) ?? 'Could not grade that.',
+      });
+    } finally {
+      set({ practiceLoading: false });
+    }
+  },
+  clearPractice: () => set({ practice: null, practiceResult: null, practiceError: '' }),
 
   activeQuiz: null,
   quizResult: null,

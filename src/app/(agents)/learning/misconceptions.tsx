@@ -191,7 +191,10 @@ export default function MisconceptionsScreen() {
                 <TopicCard
                   key={`${entry.roadmapId}:${entry.topicId}`}
                   entry={entry}
-                  onOpen={() => router.push(`/learning/${entry.roadmapId}`)}
+                  // The topic the pattern is about. Its own screen repeats these
+                  // patterns beside the material they came from, which is where
+                  // reading one is worth something.
+                  onOpen={() => router.push(`/learning/${entry.roadmapId}/${entry.topicId}`)}
                 />
               ))}
             </>

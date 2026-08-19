@@ -11,6 +11,9 @@ export type NavItem = { label: string; href: string };
 export const LEARNING_NAV: NavItem[] = [
   { label: 'Today', href: '/learning' },
   { label: 'Roadmaps', href: '/learning/roadmaps' },
+  // Third because it is a *doing* screen, and the only one that works on a day
+  // with nothing waiting — the others below are records to read.
+  { label: 'Practice', href: '/learning/practice' },
   { label: 'Digests', href: '/learning/digests' },
   { label: 'Notes', href: '/learning/notes' },
   { label: 'Insights', href: '/learning/misconceptions' },

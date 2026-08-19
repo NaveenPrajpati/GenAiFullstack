@@ -217,10 +217,29 @@ function DigestCard({
                 </Text>
               </View>
             ) : (
-              <Text className="text-danger text-[13px]">
-                {failure.quiz_result.correct}/{failure.quiz_result.total} right — look back over the
-                tips and try again.
-              </Text>
+              // Which one, and what it was testing. "1/2 right" sent the learner
+              // back over every tip they had been given with no idea which they
+              // had missed — on a gate they must pass before anything else
+              // moves. The answer itself stays withheld: this is the same set
+              // they are about to retry.
+              <View className="border-danger bg-danger-soft mt-1 rounded-xl border p-3">
+                <Text className="text-danger text-[13px] font-semibold">
+                  {failure.quiz_result.correct}/{failure.quiz_result.total} right — one more go.
+                </Text>
+                {failure.quiz_result.review.map((r, i) => (
+                  <View key={i} className="mt-1.5">
+                    <Text className="text-ink-soft text-[13px] leading-relaxed">
+                      Q{r.question + 1}
+                      {r.outcome ? ` — ${r.outcome}` : ''}
+                    </Text>
+                    {!!r.hint && (
+                      <Text className="text-ink-faint ml-3 text-[13px] leading-relaxed">
+                        {r.hint}
+                      </Text>
+                    )}
+                  </View>
+                ))}
+              </View>
             ))}
         </View>
       )}

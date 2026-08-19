@@ -33,10 +33,16 @@ function query(params: Record<string, string | undefined>): string {
 }
 
 /**
- * The three learning notifications all point at the digest archive: a digest, a
- * revision and a re-teach are the same artefact to this screen, and it already
- * filters by roadmap and topic straight from its route params — so the payload
- * only has to hand those over.
+ * The three learning notifications are the same artefact — a digest, a revision
+ * and a re-teach — and all three are about one topic, so they land on that
+ * topic's screen: the lesson is there, unread, with its recall check attached and
+ * answerable in place.
+ *
+ * They used to open the archive filtered to the topic, which was the closest
+ * thing available before topics had a route of their own. It could show the
+ * lesson but not accept the check, so acting on the notification meant a second
+ * hop to Today. A payload without both ids still falls back to the archive, since
+ * the topic route cannot be addressed without them.
  */
 const DIGEST_TYPES = ['learning_digest', 'learning_revision', 'learning_reteach'];
 
@@ -47,10 +53,14 @@ export function routeForNotification(data: unknown): string | null {
   if (!type) return null;
 
   if (DIGEST_TYPES.includes(type)) {
-    return `/learning/digests${query({
-      roadmapId: str(payload.roadmapId),
-      topicId: str(payload.topicId),
-    })}`;
+    const roadmapId = str(payload.roadmapId);
+    const topicId = str(payload.topicId);
+    // Encoded for the same reason the query values are: an id carrying a slash
+    // would otherwise add a path segment and address a route nobody chose.
+    if (roadmapId && topicId) {
+      return `/learning/${encodeURIComponent(roadmapId)}/${encodeURIComponent(topicId)}`;
+    }
+    return `/learning/digests${query({ roadmapId, topicId })}`;
   }
 
   // The agenda is what the digest is a summary of — the tasks themselves, in

@@ -100,7 +100,7 @@ export default function NotesScreen() {
               <TouchableOpacity
                 key={n._id}
                 activeOpacity={0.9}
-                onPress={() => router.push(`/learning/${n.roadmapId}`)}>
+                onPress={() => router.push(`/learning/${n.roadmapId}/${n.topicId}`)}>
                 <NoteRow
                   note={n}
                   showSource
@@ -123,7 +123,7 @@ export default function NotesScreen() {
               <TouchableOpacity
                 key={n._id}
                 activeOpacity={0.9}
-                onPress={() => router.push(`/learning/${n.roadmapId}`)}>
+                onPress={() => router.push(`/learning/${n.roadmapId}/${n.topicId}`)}>
                 <NoteRow
                   note={n}
                   showSource
